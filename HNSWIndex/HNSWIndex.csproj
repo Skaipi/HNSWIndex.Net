@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net7.0;net8.0;net9.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Platforms>AnyCPU;x86</Platforms>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <PackageId>HNSWIndex.Net</PackageId>
+    <Title>HNSWIndex</Title>
+    <Version>1.0.0</Version>
+    <Authors>Mateusz Skarupski</Authors>
+    <Company />
+    <Product>HNSWIndex</Product>
+    <Copyright>Copyright © Mateusz Skarupski 2025</Copyright>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>HNSW;KNN;Similarity;Nearest Neighbor;Graph;High-Dimensional</PackageTags>
+    <RepositoryUrl>https://github.com/Skaipi/HNSWIndex.Net</RepositoryUrl>
+    <Description>HNSWIndex provides a high-performance, approximate nearest-neighbor search solution using the HNSW data structure. It supports custom distance metrics, efficient searching with concurrency, and configurable parameters to balance speed, recall, and memory usage. Perfect for .NET applications that require fast similarity lookups (e.g., image retrieval, recommendation systems, or vector-based search).</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageOutputPath>bin\Release\</PackageOutputPath>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+
+</Project>
