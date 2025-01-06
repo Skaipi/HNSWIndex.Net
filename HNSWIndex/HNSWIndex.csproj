@@ -8,7 +8,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-    <PackageId>HNSWIndex.Net</PackageId>
+    <PackageId>HNSWIndex</PackageId>
     <Title>HNSWIndex</Title>
     <Version>1.0.0</Version>
     <Authors>Mateusz Skarupski</Authors>
