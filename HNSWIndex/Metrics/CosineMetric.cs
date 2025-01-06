@@ -76,16 +76,13 @@ namespace HNSWIndex.Metrics
                     normAScalar = HorizontalSum128(normAAcc);
                     normBScalar = HorizontalSum128(normBAcc);
                 }
-                else
+                for (; i < length; i++)
                 {
-                    for (; i < length; i++)
-                    {
-                        float va = pa[i];
-                        float vb = pb[i];
-                        dotScalar += va * vb;
-                        normAScalar += va * va;
-                        normBScalar += vb * vb;
-                    }
+                    float va = pa[i];
+                    float vb = pb[i];
+                    dotScalar += va * vb;
+                    normAScalar += va * va;
+                    normBScalar += vb * vb;
                 }
             }
 
@@ -95,8 +92,7 @@ namespace HNSWIndex.Metrics
             return 1f - dotScalar / denom;
         }
 
-        // NOTE: We assume a and b have the same dimension and normalized
-        // NOTE: Accumulation error for high-dimensional vectors might be signifficant
+        // NOTE: We assume a and b have the same dimension and are both normalized
         public static unsafe float UnitCompute(float[] a, float[] b)
         {
             int i = 0;
@@ -149,9 +145,12 @@ namespace HNSWIndex.Metrics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static float HorizontalSum256(Vector256<float> acc)
         {
-            Vector256<float> temp = Avx.HorizontalAdd(acc, acc);
-            temp = Avx.HorizontalAdd(temp, temp);
-            return temp.GetElement(0) + temp.GetElement(1);
+            Vector128<float> sum128 = Avx.Add(
+                Avx.ExtractVector128(acc, 0),
+                Avx.ExtractVector128(acc, 1)
+            );
+
+            return HorizontalSum128(sum128);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
