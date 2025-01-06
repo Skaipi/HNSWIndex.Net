@@ -36,7 +36,7 @@
             }
 
             var recall = (float)goodFinds / vectors.Count;
-            Assert.IsTrue(recall > 0.70);
+            Assert.IsTrue(recall > 0.90);
         }
 
         [TestMethod]
@@ -60,7 +60,7 @@
             }
 
             var recall = (float)goodFinds / vectors.Count;
-            Assert.IsTrue(recall > 0.70);
+            Assert.IsTrue(recall > 0.90);
         }
     }
 }

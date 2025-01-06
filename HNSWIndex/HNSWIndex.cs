@@ -7,7 +7,7 @@ namespace HNSWIndex
     {
         private Func<TItem, TItem, TDistance> distanceFnc;
 
-        private readonly HNSWParameters parameters;
+        private readonly HNSWParameters<TDistance> parameters;
 
         private readonly GraphData<TItem, TDistance> data;
 
@@ -15,9 +15,9 @@ namespace HNSWIndex
 
         private readonly GraphNavigator<TItem, TDistance> navigator;
 
-        public HNSWIndex(Func<TItem, TItem, TDistance> distFnc, HNSWParameters? hnswParameters = null)
+        public HNSWIndex(Func<TItem, TItem, TDistance> distFnc, HNSWParameters<TDistance>? hnswParameters = null)
         {
-            hnswParameters ??= new HNSWParameters();
+            hnswParameters ??= new HNSWParameters<TDistance>();
             distanceFnc = distFnc;
             parameters = hnswParameters;
 
@@ -56,7 +56,7 @@ namespace HNSWIndex
         public List<KNNResult<TItem, TDistance>> KnnQuery(TItem query, int k, Func<TItem, bool>? filterFnc = null)
         {
             if (data.Nodes.Count == 0) return new List<KNNResult<TItem, TDistance>>();
-            
+
             Func<int, bool> indexFilter = _ => true;
             if (filterFnc is not null)
                 indexFilter = (index) => filterFnc(data.Items[index]);
@@ -71,7 +71,7 @@ namespace HNSWIndex
             var distCalculator = new DistanceCalculator<TItem, TDistance>(queryDistance, query);
             var ep = navigator.FindEntryPoint(0, distCalculator);
             var topCandidates = navigator.SearchLayer(ep.Id, 0, neighboursAmount, distCalculator, indexFilter);
-        
+
             if (k < neighboursAmount)
             {
                 return topCandidates.OrderBy(c => c.Dist).Take(k).ToList().ConvertAll(c => new KNNResult<TItem, TDistance>(c.Id, data.Items[c.Id], c.Dist));

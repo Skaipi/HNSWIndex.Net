@@ -1,7 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using System.Xml.Linq;
 
 namespace HNSWIndex
 {
@@ -37,9 +36,7 @@ namespace HNSWIndex
 
         private Func<TItem, TItem, TDistance> distanceFnc;
 
-        private Func<List<NodeDistance<TDistance>>, Func<int, int, TDistance>, int, List<int>> Heuristic = Heuristic<TDistance>.DefaultHeuristic;
-
-        internal GraphData(Func<TItem, TItem, TDistance> distance, HNSWParameters parameters)
+        internal GraphData(Func<TItem, TItem, TDistance> distance, HNSWParameters<TDistance> parameters)
         {
             distanceFnc = distance;
             rng = parameters.RandomSeed < 0 ? new Random() : new Random(parameters.RandomSeed);

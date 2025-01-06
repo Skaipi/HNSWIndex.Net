@@ -10,9 +10,9 @@ namespace HNSWIndex
     {
         private GraphData<TItem, TDistance> data;
         private GraphNavigator<TItem, TDistance> navigator;
-        private HNSWParameters parameters;
+        private HNSWParameters<TDistance> parameters;
 
-        internal GraphConnector(GraphData<TItem, TDistance> graphData, GraphNavigator<TItem, TDistance> graphNavigator, HNSWParameters hnswParams) 
+        internal GraphConnector(GraphData<TItem, TDistance> graphData, GraphNavigator<TItem, TDistance> graphNavigator, HNSWParameters<TDistance> hnswParams)
         {
             data = graphData;
             navigator = graphNavigator;
@@ -37,7 +37,7 @@ namespace HNSWIndex
                 data.SetEntryPoint(nodeId);
                 Monitor.Exit(data.entryPointLock);
             }
-            else 
+            else
             {
                 Monitor.Exit(data.entryPointLock);
                 AddNewConnections(currNode);
