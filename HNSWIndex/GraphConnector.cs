@@ -1,8 +1,4 @@
-﻿using Microsoft.VisualBasic;
-using System;
-using System.Numerics;
-using System.Reflection.Emit;
-using System.Xml.Linq;
+﻿using System.Numerics;
 
 namespace HNSWIndex
 {

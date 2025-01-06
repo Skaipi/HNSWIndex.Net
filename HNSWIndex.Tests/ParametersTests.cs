@@ -1,6 +1,4 @@
-﻿using System.Reflection.Metadata.Ecma335;
-
-namespace HNSWIndex.Tests
+﻿namespace HNSWIndex.Tests
 {
     [TestClass]
     public sealed class ParametersTests

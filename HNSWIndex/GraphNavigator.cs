@@ -1,5 +1,4 @@
 ﻿using HNSWIndex.HnswLib;
-using System;
 using System.Numerics;
 
 namespace HNSWIndex
@@ -13,7 +12,7 @@ namespace HNSWIndex
         private IComparer<NodeDistance<TDistance>> fartherFirst;
         private IComparer<NodeDistance<TDistance>> closerFirst;
 
-        internal GraphNavigator(GraphData<TItem, TDistance> graphData) 
+        internal GraphNavigator(GraphData<TItem, TDistance> graphData)
         {
             data = graphData;
             pool = new VisitedListPool(1, graphData.Capacity);
@@ -59,7 +58,7 @@ namespace HNSWIndex
         {
             filterFnc ??= noFilter;
             var topCandidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k), fartherFirst);
-            var candidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k*2), closerFirst); // Guess that k*2 space is usually enough
+            var candidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k * 2), closerFirst); // Guess that k*2 space is usually enough
 
             var entry = new NodeDistance<TDistance> { Dist = distanceCalculator.From(entryPointId), Id = entryPointId };
             // TODO: Make it max value of TDistance

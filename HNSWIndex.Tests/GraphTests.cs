@@ -1,7 +1,6 @@
 ﻿namespace HNSWIndex.Tests
 {
     using HNSWIndex;
-    using System.Numerics;
 
     [TestClass]
     public sealed class GraphTests
@@ -27,7 +26,7 @@
             }
 
             var goodFinds = 0;
-            for (int i=0; i< vectors.Count; i++)
+            for (int i = 0; i < vectors.Count; i++)
             {
                 var result = index.KnnQuery(vectors[i], 1);
                 var bestItem = result[0].Label;
@@ -45,7 +44,8 @@
             Assert.IsNotNull(vectors);
 
             var index = new HNSWIndex<float[], float>(Metrics.CosineMetric.Compute);
-            Parallel.For(0, vectors.Count, i => {
+            Parallel.For(0, vectors.Count, i =>
+            {
                 Utils.Normalize(vectors[i]);
                 index.Add(vectors[i]);
             });
