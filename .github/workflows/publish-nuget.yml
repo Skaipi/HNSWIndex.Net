@@ -18,16 +18,16 @@ jobs:
           dotnet-version: '6.0.x'
 
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore ./HNSWIndex/HNSWIndex.csproj
 
       - name: Build
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build ./HNSWIndex/HNSWIndex.csproj --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test --verbosity normal
+        run: dotnet test ./HNSWIndex/HNSWIndex.csproj --verbosity normal
 
       - name: Pack
-        run: dotnet pack --configuration Release -o ./artifacts
+        run: dotnet pack ./HNSWIndex/HNSWIndex.csproj --configuration Release -o ./artifacts
 
       - name: Publish to NuGet
         run: dotnet nuget push ./artifacts/*.nupkg \
