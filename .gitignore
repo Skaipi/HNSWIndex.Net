@@ -7,6 +7,9 @@
 [Oo]bj/
 [Ll]og/
 
+# Build artifacts
+artifacts/
+
 # Visual Studio profiler
 *.psess
 *.vsp
