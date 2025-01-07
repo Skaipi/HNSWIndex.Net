@@ -17,16 +17,16 @@ namespace HNSWIndex
 
         internal void ConnectNewNode(int nodeId)
         {
+            // If this is new ep we keep lock for entire Add Operation
+            Monitor.Enter(data.entryPointLock);
             if (data.EntryPointId < 0)
             {
                 data.SetEntryPoint(nodeId);
+                Monitor.Exit(data.entryPointLock);
                 return;
             }
 
             var currNode = data.Nodes[nodeId];
-
-            // If this is new ep we keep lock for entire Add Operation
-            Monitor.Enter(data.entryPointLock);
             if (currNode.MaxLayer > data.GetTopLayer())
             {
                 AddNewConnections(currNode);
