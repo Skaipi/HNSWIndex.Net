@@ -1,4 +1,4 @@
-## Test# HNSWIndex
+# HNSWIndex
 **HNSWIndex** is a .NET library for constructing approximate nearest-neighbor (ANN) indices based on the _Hierarchical Navigable Small World_ (HNSW) graph. This data structure provides efficient similarity searches for large, high-dimensional datasets.
 
 ## Key Features
