@@ -3,13 +3,12 @@ name: Publish NuGet Package
 on:
   push:
     branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
 
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        dotnet-version: [ '7.0.x', '8.0.x', '9.0.x' ]
 
     steps:
       - name: Check out code
@@ -18,7 +17,7 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-version: '7.0.x'
 
       - name: Restore dependencies
         run: dotnet restore ./HNSWIndex/HNSWIndex.csproj
