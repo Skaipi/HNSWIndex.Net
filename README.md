@@ -8,9 +8,9 @@
  - **Concurrency Support**: Thread safe graph building API 
  - **Configurable Parameters**: Fine-tune the indexing performance and memory trade-offs with parameters
 ## Installation
-Install via [NuGet](https://www.nuget.org/):
+Install via [NuGet](https://www.nuget.org/packages/HNSWIndex/):
 ```
-dotnet add package HNSWIndex.Net
+dotnet add package HNSWIndex
 ```
 Or inside your **.csproj**:
 ```
