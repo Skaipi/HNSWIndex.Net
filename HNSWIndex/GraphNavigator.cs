@@ -3,16 +3,16 @@ using System.Numerics;
 
 namespace HNSWIndex
 {
-    internal class GraphNavigator<TItem, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
+    internal class GraphNavigator<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
     {
         private static Func<int, bool> noFilter = _ => true;
 
         private VisitedListPool pool;
-        private GraphData<TItem, TDistance> data;
+        private GraphData<TLabel, TDistance> data;
         private IComparer<NodeDistance<TDistance>> fartherFirst;
         private IComparer<NodeDistance<TDistance>> closerFirst;
 
-        internal GraphNavigator(GraphData<TItem, TDistance> graphData)
+        internal GraphNavigator(GraphData<TLabel, TDistance> graphData)
         {
             data = graphData;
             pool = new VisitedListPool(1, graphData.Capacity);

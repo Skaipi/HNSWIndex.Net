@@ -29,8 +29,8 @@
             for (int i = 0; i < vectors.Count; i++)
             {
                 var result = index.KnnQuery(vectors[i], 1);
-                var bestItem = result[0].Label;
-                if (vectors[i] == bestItem)
+                var bestFound = result[0].Label;
+                if (vectors[i] == bestFound)
                     goodFinds++;
             }
 
@@ -57,8 +57,8 @@
             for (int i = 0; i < vectors.Count; i++)
             {
                 var result = index.KnnQuery(vectors[i], 1);
-                var bestItem = result[0].Label;
-                if (vectors[i] == bestItem)
+                var bestFound = result[0].Label;
+                if (vectors[i] == bestFound)
                     goodFinds++;
             }
 
@@ -84,8 +84,8 @@
             for (int i = 0; i < vectors.Count; i++)
             {
                 var result = index.KnnQuery(vectors[i], 1);
-                var bestItem = result[0].Label;
-                if (vectors[i] == bestItem)
+                var bestFound = result[0].Label;
+                if (vectors[i] == bestFound)
                     goodFinds++;
             }
 
@@ -111,8 +111,8 @@
             for (int i = 0; i < vectors.Count; i++)
             {
                 var result = index.KnnQuery(vectors[i], 1);
-                var bestItem = result[0].Label;
-                if (vectors[i] == bestItem)
+                var bestFound = result[0].Label;
+                if (vectors[i] == bestFound)
                     goodFinds++;
             }
 

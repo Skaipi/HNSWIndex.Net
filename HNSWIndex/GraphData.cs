@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace HNSWIndex
 {
-    internal class GraphData<TItem, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
+    internal class GraphData<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
     {
         internal event EventHandler<ReallocateEventArgs>? Reallocated;
 
@@ -12,7 +12,7 @@ namespace HNSWIndex
 
         internal List<Node> Nodes { get; private set; }
 
-        internal ConcurrentDictionary<int, TItem> Items { get; private set; }
+        internal ConcurrentDictionary<int, TLabel> Items { get; private set; }
 
         private object removedIndexesLock = new object();
 
@@ -34,9 +34,9 @@ namespace HNSWIndex
 
         private int maxEdges;
 
-        private Func<TItem, TItem, TDistance> distanceFnc;
+        private Func<TLabel, TLabel, TDistance> distanceFnc;
 
-        internal GraphData(Func<TItem, TItem, TDistance> distance, HNSWParameters<TDistance> parameters)
+        internal GraphData(Func<TLabel, TLabel, TDistance> distance, HNSWParameters<TDistance> parameters)
         {
             distanceFnc = distance;
             rng = parameters.RandomSeed < 0 ? new Random() : new Random(parameters.RandomSeed);
@@ -46,10 +46,10 @@ namespace HNSWIndex
 
             RemovedIndexes = new HashSet<int>();
             Nodes = new List<Node>(parameters.CollectionSize);
-            Items = new ConcurrentDictionary<int, TItem>(65536, parameters.CollectionSize); // 2^16 amount of locks
+            Items = new ConcurrentDictionary<int, TLabel>(65536, parameters.CollectionSize); // 2^16 amount of locks
         }
 
-        internal int AddItem(TItem item)
+        internal int AddItem(TLabel item)
         {
             int vacantId = -1;
             lock (removedIndexesLock)

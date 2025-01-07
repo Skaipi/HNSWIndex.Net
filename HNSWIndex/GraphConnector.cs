@@ -2,13 +2,13 @@
 
 namespace HNSWIndex
 {
-    internal class GraphConnector<TItem, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
+    internal class GraphConnector<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
     {
-        private GraphData<TItem, TDistance> data;
-        private GraphNavigator<TItem, TDistance> navigator;
+        private GraphData<TLabel, TDistance> data;
+        private GraphNavigator<TLabel, TDistance> navigator;
         private HNSWParameters<TDistance> parameters;
 
-        internal GraphConnector(GraphData<TItem, TDistance> graphData, GraphNavigator<TItem, TDistance> graphNavigator, HNSWParameters<TDistance> hnswParams)
+        internal GraphConnector(GraphData<TLabel, TDistance> graphData, GraphNavigator<TLabel, TDistance> graphNavigator, HNSWParameters<TDistance> hnswParams)
         {
             data = graphData;
             navigator = graphNavigator;

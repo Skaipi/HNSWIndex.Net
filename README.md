@@ -3,7 +3,7 @@
 
 ## Key Features
  - **High Performance**: Implements the HNSW algorithm for fast approximate k-NN search.
- - **Flexible Distance Metric**: Pass any `Func<TItem, TItem, TDistance>` for custom distance calculation.
+ - **Flexible Distance Metric**: Pass any `Func<TLabel, TLabel, TDistance>` for custom distance calculation.
  - **Flexible Heuristic**: Pass heuristic function for nodes linking.
  - **Concurrency Support**: Thread safe graph building API 
  - **Configurable Parameters**: Fine-tune the indexing performance and memory trade-offs with parameters
