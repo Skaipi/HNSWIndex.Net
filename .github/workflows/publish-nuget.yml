@@ -14,13 +14,13 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
 
-      - name: Set up .NET
+      - name: Set up .NET versions
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: |
-            '7.0.x'
-            '8.0.x'
-            '9.0.x'
+            7.0.x
+            8.0.x
+            9.0.x
 
       - name: Restore dependencies
         run: dotnet restore ./HNSWIndex/HNSWIndex.csproj
