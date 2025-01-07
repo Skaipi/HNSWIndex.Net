@@ -84,22 +84,24 @@ namespace HNSWIndex
             {
                 int newNeighbourId = bestNeighboursIds[i];
                 Connect(currentNode, data.Nodes[newNeighbourId], layer);
-
-                lock (data.Nodes[newNeighbourId].OutEdgesLock)
-                {
-                    Connect(data.Nodes[newNeighbourId], currentNode, layer);
-                }
+                Connect(data.Nodes[newNeighbourId], currentNode, layer);
             }
         }
 
         internal void RemoveOutEdge(Node target, Node badNeighbour, int layer)
         {
-            target.OutEdges[layer].Remove(badNeighbour.Id);
+            lock (target.OutEdgesLock)
+            {
+                target.OutEdges[layer].Remove(badNeighbour.Id);
+            }
         }
 
         internal void RemoveInEdge(Node target, Node badNeighbour, int layer)
         {
-            target.InEdges[layer].Remove(badNeighbour.Id);
+            lock (target.InEdgesLock)
+            {
+                target.InEdges[layer].Remove(badNeighbour.Id);
+            }
         }
 
         private void AddNewConnections(Node currNode)
@@ -115,43 +117,47 @@ namespace HNSWIndex
                 for (int i = 0; i < bestNeighboursIds.Count; ++i)
                 {
                     int newNeighbourId = bestNeighboursIds[i];
-
                     Connect(currNode, data.Nodes[newNeighbourId], layer);
-
-                    lock (data.Nodes[newNeighbourId].OutEdgesLock)
-                    {
-                        Connect(data.Nodes[newNeighbourId], currNode, layer);
-                    }
+                    Connect(data.Nodes[newNeighbourId], currNode, layer);
                 }
             }
         }
 
         private void Connect(Node node, Node neighbour, int layer)
         {
-            node.OutEdges[layer].Add(neighbour.Id);
-            neighbour.InEdges[layer].Add(node.Id);
-            if (node.OutEdges[layer].Count > data.MaxEdges(layer))
+            lock (node.OutEdgesLock)
             {
-                foreach (var neighbourId in node.OutEdges[layer])
+                node.OutEdges[layer].Add(neighbour.Id);
+                lock (neighbour.InEdgesLock)
                 {
-                    lock (data.Nodes[neighbourId].InEdgesLock)
+                    neighbour.InEdges[layer].Add(node.Id);
+                }
+                if (node.OutEdges[layer].Count > data.MaxEdges(layer))
+                {
+                    foreach (var neighbourId in node.OutEdges[layer])
                     {
-                        data.Nodes[neighbourId].InEdges[layer].Remove(node.Id);
+                        lock (data.Nodes[neighbourId].InEdgesLock)
+                        {
+                            data.Nodes[neighbourId].InEdges[layer].Remove(node.Id);
+                        }
                     }
-                }
 
-                var candidates = new List<NodeDistance<TDistance>>(node.OutEdges[layer].Count);
-                foreach (var neighbourId in node.OutEdges[layer])
-                {
-                    candidates.Add(new NodeDistance<TDistance> { Dist = data.Distance(neighbourId, node.Id), Id = neighbourId });
-                }
+                    var candidates = new List<NodeDistance<TDistance>>(node.OutEdges[layer].Count);
+                    foreach (var neighbourId in node.OutEdges[layer])
+                    {
+                        candidates.Add(new NodeDistance<TDistance> { Dist = data.Distance(neighbourId, node.Id), Id = neighbourId });
+                    }
 
-                var selectedCandidates = Heuristic<TDistance>.DefaultHeuristic(candidates, data.Distance, data.MaxEdges(layer));
-                node.OutEdges[layer] = selectedCandidates;
+                    var selectedCandidates = Heuristic<TDistance>.DefaultHeuristic(candidates, data.Distance, data.MaxEdges(layer));
+                    node.OutEdges[layer] = selectedCandidates;
 
-                foreach (var neighbourId in node.OutEdges[layer])
-                {
-                    data.Nodes[neighbourId].InEdges[layer].Add(node.Id);
+                    foreach (var neighbourId in node.OutEdges[layer])
+                    {
+                        lock (data.Nodes[neighbourId].InEdgesLock)
+                        {
+                            data.Nodes[neighbourId].InEdges[layer].Add(node.Id);
+                        }
+                    }
                 }
             }
         }

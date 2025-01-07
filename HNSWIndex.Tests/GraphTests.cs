@@ -36,6 +36,13 @@
 
             var recall = (float)goodFinds / vectors.Count;
             Assert.IsTrue(recall > 0.85);
+
+            // Ensure in and out edges are balanced
+            var info = index.GetInfo();
+            foreach (var layer in info.Layers)
+            {
+                Assert.IsTrue(layer.AvgOutEdges == layer.AvgInEdges);
+            }
         }
 
         [TestMethod]
@@ -61,6 +68,13 @@
 
             var recall = (float)goodFinds / vectors.Count;
             Assert.IsTrue(recall > 0.85);
+
+            // Ensure in and out edges are balanced
+            var info = index.GetInfo();
+            foreach (var layer in info.Layers)
+            {
+                Assert.IsTrue(layer.AvgOutEdges == layer.AvgInEdges);
+            }
         }
     }
 }
