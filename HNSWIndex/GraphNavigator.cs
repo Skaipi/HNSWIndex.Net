@@ -1,5 +1,4 @@
-﻿using HNSWIndex.HnswLib;
-using System.Numerics;
+﻿using System.Numerics;
 
 namespace HNSWIndex
 {
