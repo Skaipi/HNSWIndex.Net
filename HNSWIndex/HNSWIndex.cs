@@ -52,6 +52,11 @@ namespace HNSWIndex
             data.RemoveItem(itemIndex);
         }
 
+        public List<TLabel> Items()
+        {
+            return data.Items.Values.ToList();
+        }
+
         public List<KNNResult<TLabel, TDistance>> KnnQuery(TLabel query, int k, Func<TLabel, bool>? filterFnc = null)
         {
             if (data.Nodes.Count == 0) return new List<KNNResult<TLabel, TDistance>>();
