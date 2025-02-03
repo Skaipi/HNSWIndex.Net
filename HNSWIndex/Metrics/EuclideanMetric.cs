@@ -87,4 +87,12 @@ namespace HNSWIndex.Metrics
             }
         }
     }
+
+    public class EuclideanMetric
+    {
+        public static float Compute(float[] a, float[] b)
+        {
+            return (float)Math.Sqrt(SquaredEuclideanMetric.Compute(a, b));
+        }
+    }
 }
