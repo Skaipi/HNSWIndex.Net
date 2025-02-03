@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net7.0;net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Platforms>AnyCPU;x86</Platforms>
@@ -10,7 +10,7 @@
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageId>HNSWIndex</PackageId>
     <Title>HNSWIndex</Title>
-    <Version>1.0.2</Version>
+    <Version>1.1.0</Version>
     <Authors>Mateusz Skarupski</Authors>
     <Company />
     <Product>HNSWIndex</Product>
