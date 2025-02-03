@@ -57,6 +57,11 @@ namespace HNSWIndex
             return data.Items.Values.ToList();
         }
 
+        public GraphLayer GetGraphLayer(int layer)
+        {
+            return new GraphLayer(data.Nodes, layer);
+        }
+
         public List<KNNResult<TLabel, TDistance>> KnnQuery(TLabel query, int k, Func<TLabel, bool>? filterFnc = null)
         {
             if (data.Nodes.Count == 0) return new List<KNNResult<TLabel, TDistance>>();
