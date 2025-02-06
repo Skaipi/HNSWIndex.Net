@@ -78,7 +78,7 @@ namespace HNSWIndex
             var bestPeer = navigator.FindEntryPoint(layer, distanceCalculator);
 
             var topCandidates = navigator.SearchLayer(bestPeer.Id, layer, parameters.MaxCandidates, distanceCalculator, id => id != nodeId && id != src.Id);
-            var bestNeighboursIds = Heuristic<TDistance>.DefaultHeuristic(topCandidates, data.Distance, data.MaxEdges(layer));
+            var bestNeighboursIds = parameters.Heuristic(topCandidates, data.Distance, data.MaxEdges(layer));
 
             for (int i = 0; i < bestNeighboursIds.Count; ++i)
             {
@@ -112,7 +112,7 @@ namespace HNSWIndex
             for (int layer = Math.Min(currNode.MaxLayer, data.GetTopLayer()); layer >= 0; --layer)
             {
                 var topCandidates = navigator.SearchLayer(bestPeer.Id, layer, parameters.MaxCandidates, distCalculator);
-                var bestNeighboursIds = Heuristic<TDistance>.DefaultHeuristic(topCandidates, data.Distance, data.MaxEdges(layer));
+                var bestNeighboursIds = parameters.Heuristic(topCandidates, data.Distance, data.MaxEdges(layer));
 
                 for (int i = 0; i < bestNeighboursIds.Count; ++i)
                 {
@@ -148,7 +148,7 @@ namespace HNSWIndex
                         candidates.Add(new NodeDistance<TDistance> { Dist = data.Distance(neighbourId, node.Id), Id = neighbourId });
                     }
 
-                    var selectedCandidates = Heuristic<TDistance>.DefaultHeuristic(candidates, data.Distance, data.MaxEdges(layer));
+                    var selectedCandidates = parameters.Heuristic(candidates, data.Distance, data.MaxEdges(layer));
                     node.OutEdges[layer] = selectedCandidates;
 
                     foreach (var neighbourId in node.OutEdges[layer])

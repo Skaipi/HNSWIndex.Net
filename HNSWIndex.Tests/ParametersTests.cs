@@ -35,6 +35,7 @@
             }
 
             var recall = (float)goodFinds / vectors.Count;
+            Console.WriteLine(recall);
             Assert.IsTrue(recall > 0.90);
         }
 
@@ -122,7 +123,7 @@
 
         public static List<int> BruteForceHeuristic(List<NodeDistance<float>> candidates, Func<int, int, float> distanceFnc, int maxEdges)
         {
-            return candidates.OrderBy(x => -x.Dist).Take(maxEdges).ToList().ConvertAll(x => x.Id);
+            return candidates.OrderBy(x => x.Dist).Take(maxEdges).ToList().ConvertAll(x => x.Id);
         }
     }
 }
