@@ -76,5 +76,45 @@
                 Assert.IsTrue(layer.AvgOutEdges == layer.AvgInEdges);
             }
         }
+
+        [TestMethod]
+        public void QueryGraphMultiThread()
+        {
+            Assert.IsNotNull(vectors);
+
+            var k = 10;
+            var index = new HNSWIndex<float[], float>(Metrics.CosineMetric.UnitCompute);
+            for (int i = 0; i < vectors.Count; i++)
+            {
+                Utils.Normalize(vectors[i]);
+                index.Add(vectors[i]);
+            }
+
+            var singleThreadResults = new List<List<KNNResult<float[], float>>>(vectors.Count);
+            var multiThreadResults = new List<List<KNNResult<float[], float>>>(vectors.Count);
+            for (int i=0; i< vectors.Count; i++)
+            {
+                singleThreadResults.Add(new List<KNNResult<float[], float>>());
+                multiThreadResults.Add(new List<KNNResult<float[], float>>());
+            }
+
+            for (int i = 0; i < vectors.Count; i++)
+            {
+                singleThreadResults[i] = index.KnnQuery(vectors[i], k);
+            }
+
+            Parallel.For(0, vectors.Count, i =>
+            {
+                multiThreadResults[i] = index.KnnQuery(vectors[i], k);
+            });
+
+            for (int i=0; i<vectors.Count; i++)
+            {
+                for (int j=0; j<k; j++)
+                {
+                    Assert.IsTrue(singleThreadResults[i][j].Id == multiThreadResults[i][j].Id);
+                }
+            }
+        }
     }
 }
