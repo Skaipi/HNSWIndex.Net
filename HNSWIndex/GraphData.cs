@@ -89,12 +89,15 @@ namespace HNSWIndex
 
         internal void RemoveEntryPoint()
         {
-            for (int layer = GetTopLayer(); layer >= 0; layer--)
+            lock (entryPointLock)
             {
-                if (EntryPoint.OutEdges[layer].Count > 0)
+                for (int layer = GetTopLayer(); layer >= 0; layer--)
                 {
-                    var neighbourId = EntryPoint.OutEdges[layer].MaxBy(id => Nodes[id].OutEdges.Count);
-                    SetEntryPoint(neighbourId);
+                    if (EntryPoint.OutEdges[layer].Count > 0)
+                    {
+                        var neighbourId = EntryPoint.OutEdges[layer].MaxBy(id => Nodes[id].OutEdges.Count);
+                        SetEntryPoint(neighbourId);
+                    }
                 }
             }
         }

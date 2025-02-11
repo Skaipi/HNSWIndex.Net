@@ -43,29 +43,58 @@ namespace HNSWIndex
         internal void RemoveConnections(int itemIndex)
         {
             var node = data.Nodes[itemIndex];
-            for (int layer_id = 0; layer_id <= node.MaxLayer; layer_id++)
+            lock (node.OutEdgesLock)
             {
-                var mOnLayer = data.MaxEdges(layer_id);
-                for (int j = 0; j < node.OutEdges[layer_id].Count; j++)
+                for (int layer = 0; layer <= node.MaxLayer; layer++)
                 {
-                    var neighbourId = node.OutEdges[layer_id][j];
-                    var neighbourNode = data.Nodes[neighbourId];
-
-                    RemoveInEdge(neighbourNode, node, layer_id);
-                    if (neighbourNode.OutEdges[layer_id].Count <= mOnLayer / 2 || neighbourNode.InEdges[layer_id].Count <= mOnLayer / 2)
+                    var mOnLayer = data.MaxEdges(layer);
+                    // NOTE: each candidate loose exactly one in-edge
+                    for (int j = 0; j < node.OutEdges[layer].Count; j++)
                     {
-                        RecomputeNodeConnectionsAtLayer(neighbourId, layer_id, node);
+                        var neighbourId = node.OutEdges[layer][j];
+                        var neighbourNode = data.Nodes[neighbourId];
+                        RemoveInEdge(neighbourNode, node, layer);
                     }
-                }
 
-                for (int j = 0; j < node.InEdges[layer_id].Count; j++)
-                {
-                    var neighbourId = node.InEdges[layer_id][j];
-                    var neighbourNode = data.Nodes[neighbourId];
-                    RemoveOutEdge(neighbourNode, node, layer_id);
-                    if (neighbourNode.OutEdges[layer_id].Count <= mOnLayer / 2 || neighbourNode.InEdges[layer_id].Count <= mOnLayer / 2)
+                    var orphanNodes = node.OutEdges[layer];
+                    for (int j = 0; j < node.InEdges[layer].Count; j++)
                     {
-                        RecomputeNodeConnectionsAtLayer(neighbourId, layer_id, node);
+                        var neighbourId = node.InEdges[layer][j];
+                        var neighbourNode = data.Nodes[neighbourId];
+                        RemoveOutEdge(neighbourNode, node, layer);
+
+                        var distanceCalculator = new DistanceCalculator<int, TDistance>(data.Distance, neighbourId);
+                        var candidates = new List<NodeDistance<TDistance>>();
+                        for (int i = 0; i < orphanNodes.Count; i++)
+                        {
+                            int candidateId = orphanNodes[i];
+                            if (candidateId == neighbourId)
+                                continue;
+
+                            if (!neighbourNode.OutEdges[layer].Contains(candidateId))
+                            {
+                                candidates.Add(new NodeDistance<TDistance>
+                                {
+                                    Dist = distanceCalculator.From(candidateId),
+                                    Id = candidateId
+                                });
+                            }
+                        }
+                        var selectedCandidates = parameters.Heuristic(candidates, data.Distance, mOnLayer);
+
+                        for (int i = 0; i < selectedCandidates.Count; i++)
+                        {
+                            int newNeighbourId = selectedCandidates[i];
+                            var newNeighbour = data.Nodes[newNeighbourId];
+                            Connect(neighbourNode, newNeighbour, layer);
+
+                            if (!newNeighbour.OutEdges[layer].Contains(neighbourId))
+                            {
+                                Connect(newNeighbour, neighbourNode, layer);
+                            }
+
+                            orphanNodes.Remove(newNeighbourId);
+                        }
                     }
                 }
             }
