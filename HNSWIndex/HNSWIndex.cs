@@ -33,7 +33,7 @@ namespace HNSWIndex
         /// <summary>
         /// Add new item with given label to the graph.
         /// </summary>
-        public void Add(TLabel item)
+        public int Add(TLabel item)
         {
             var itemId = -1;
             lock (data.indexLock)
@@ -45,6 +45,7 @@ namespace HNSWIndex
             {
                 connector.ConnectNewNode(itemId);
             }
+            return itemId;
         }
 
         /// <summary>

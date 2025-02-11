@@ -56,7 +56,7 @@ namespace HNSWIndex
                         RemoveInEdge(neighbourNode, node, layer);
                     }
 
-                    var orphanNodes = node.OutEdges[layer];
+                    var children = node.OutEdges[layer];
                     for (int j = 0; j < node.InEdges[layer].Count; j++)
                     {
                         var neighbourId = node.InEdges[layer][j];
@@ -65,9 +65,9 @@ namespace HNSWIndex
 
                         var distanceCalculator = new DistanceCalculator<int, TDistance>(data.Distance, neighbourId);
                         var candidates = new List<NodeDistance<TDistance>>();
-                        for (int i = 0; i < orphanNodes.Count; i++)
+                        for (int i = 0; i < children.Count; i++)
                         {
-                            int candidateId = orphanNodes[i];
+                            int candidateId = children[i];
                             if (candidateId == neighbourId)
                                 continue;
 
@@ -93,7 +93,8 @@ namespace HNSWIndex
                                 Connect(newNeighbour, neighbourNode, layer);
                             }
 
-                            orphanNodes.Remove(newNeighbourId);
+                            // Removing this node improves graph's structure but cost a lot
+                            children.Remove(newNeighbourId);
                         }
                     }
                 }

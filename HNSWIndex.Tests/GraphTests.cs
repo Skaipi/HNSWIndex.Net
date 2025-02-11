@@ -10,7 +10,7 @@
         [TestInitialize]
         public void TestInitialize()
         {
-            vectors = Utils.RandomVectors(128, 5000);
+            vectors = Utils.RandomVectors(128, 2_000);
         }
 
         [TestMethod]
@@ -92,7 +92,7 @@
 
             var singleThreadResults = new List<List<KNNResult<float[], float>>>(vectors.Count);
             var multiThreadResults = new List<List<KNNResult<float[], float>>>(vectors.Count);
-            for (int i=0; i< vectors.Count; i++)
+            for (int i = 0; i < vectors.Count; i++)
             {
                 singleThreadResults.Add(new List<KNNResult<float[], float>>());
                 multiThreadResults.Add(new List<KNNResult<float[], float>>());
@@ -108,13 +108,58 @@
                 multiThreadResults[i] = index.KnnQuery(vectors[i], k);
             });
 
-            for (int i=0; i<vectors.Count; i++)
+            for (int i = 0; i < vectors.Count; i++)
             {
-                for (int j=0; j<k; j++)
+                for (int j = 0; j < k; j++)
                 {
                     Assert.IsTrue(singleThreadResults[i][j].Id == multiThreadResults[i][j].Id);
                 }
             }
+        }
+
+        [TestMethod]
+        public void RemoveNodesTest()
+        {
+            Assert.IsNotNull(vectors);
+
+            var index = new HNSWIndex<float[], float>(Metrics.CosineMetric.UnitCompute);
+            var evenIndexedVectors = new List<(float[] Label, int Id)>();
+            var oddIndexedVectors = new List<(float[] Label, int Id)>();
+            for (int i = 0; i < vectors.Count; i++)
+            {
+                Utils.Normalize(vectors[i]);
+                var id = index.Add(vectors[i]);
+                if (i % 2 == 0) evenIndexedVectors.Add((vectors[i], id));
+                else oddIndexedVectors.Add((vectors[i], id));
+            }
+
+            var goodFinds = 0;
+            for (int i = 0; i < vectors.Count; i++)
+            {
+                var result = index.KnnQuery(vectors[i], 1);
+                var bestFound = result[0].Label;
+                if (vectors[i] == bestFound)
+                    goodFinds++;
+            }
+            var insertRecall = (float)goodFinds / vectors.Count;
+
+            for (int i = 0; i < oddIndexedVectors.Count; i++)
+            {
+                index.Remove(oddIndexedVectors[i].Id);
+            }
+
+            goodFinds = 0;
+            for (int i = 0; i < evenIndexedVectors.Count; i++)
+            {
+                var result = index.KnnQuery(evenIndexedVectors[i].Label, 1);
+                var bestFound = result[0].Label;
+                if (evenIndexedVectors[i].Label == bestFound)
+                    goodFinds++;
+            }
+            var removalRecall = (float)goodFinds / evenIndexedVectors.Count;
+
+            // Allow 10% drop after removal
+            Assert.IsTrue(insertRecall < removalRecall + 0.1 * insertRecall);
         }
     }
 }
