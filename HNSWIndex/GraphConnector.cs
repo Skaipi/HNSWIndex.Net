@@ -42,83 +42,43 @@ namespace HNSWIndex
 
         internal void RemoveConnections(int itemIndex)
         {
-            var node = data.Nodes[itemIndex];
-            lock (node.OutEdgesLock)
+            var removedNode = data.Nodes[itemIndex];
+            lock (removedNode.OutEdgesLock)
             {
-                for (int layer = 0; layer <= node.MaxLayer; layer++)
+                for (int layer = 0; layer <= removedNode.MaxLayer; layer++)
                 {
+                    WipeRelationsWithNode(removedNode, layer);
+
                     var mOnLayer = data.MaxEdges(layer);
-                    // NOTE: each candidate loose exactly one in-edge
-                    for (int j = 0; j < node.OutEdges[layer].Count; j++)
+                    var children = removedNode.OutEdges[layer];
+                    for (int j = 0; j < removedNode.InEdges[layer].Count; j++)
                     {
-                        var neighbourId = node.OutEdges[layer][j];
-                        var neighbourNode = data.Nodes[neighbourId];
-                        RemoveInEdge(neighbourNode, node, layer);
-                    }
+                        var activeNodeId = removedNode.InEdges[layer][j];
+                        var activeNode = data.Nodes[activeNodeId];
+                        var activeNodedEdges = activeNode.OutEdges[layer];
+                        RemoveOutEdge(activeNode, removedNode, layer);
+                        WipeRelationsWithNode(activeNode, layer);
 
-                    var children = node.OutEdges[layer];
-                    for (int j = 0; j < node.InEdges[layer].Count; j++)
-                    {
-                        var neighbourId = node.InEdges[layer][j];
-                        var neighbourNode = data.Nodes[neighbourId];
-                        RemoveOutEdge(neighbourNode, node, layer);
-
-                        var distanceCalculator = new DistanceCalculator<int, TDistance>(data.Distance, neighbourId);
-                        var candidates = new List<NodeDistance<TDistance>>();
+                        // Get valid candidates from children of removed node
+                        var candidates = new List<int>(children.Count);
                         for (int i = 0; i < children.Count; i++)
                         {
                             int candidateId = children[i];
-                            if (candidateId == neighbourId)
+                            if (candidateId == activeNodeId)
                                 continue;
 
-                            if (!neighbourNode.OutEdges[layer].Contains(candidateId))
-                            {
-                                candidates.Add(new NodeDistance<TDistance>
-                                {
-                                    Dist = distanceCalculator.From(candidateId),
-                                    Id = candidateId
-                                });
-                            }
+                            if (!activeNodedEdges.Contains(candidateId))
+                                candidates.Add(candidateId);
                         }
-                        var selectedCandidates = parameters.Heuristic(candidates, data.Distance, mOnLayer);
 
-                        for (int i = 0; i < selectedCandidates.Count; i++)
-                        {
-                            int newNeighbourId = selectedCandidates[i];
-                            var newNeighbour = data.Nodes[newNeighbourId];
-                            Connect(neighbourNode, newNeighbour, layer);
-
-                            if (!newNeighbour.OutEdges[layer].Contains(neighbourId))
-                            {
-                                Connect(newNeighbour, neighbourNode, layer);
-                            }
-
-                            // Removing this node improves graph's structure but cost a lot
-                            children.Remove(newNeighbourId);
-                        }
+                        RecomputeConnections(activeNode, candidates.Concat(activeNodedEdges).ToList(), layer);
+                        SetRelationsWithNode(activeNode, layer);
                     }
                 }
             }
         }
 
-        internal void RecomputeNodeConnectionsAtLayer(int nodeId, int layer, Node src)
-        {
-            var currentNode = data.Nodes[nodeId];
-            var distanceCalculator = new DistanceCalculator<int, TDistance>(data.Distance, nodeId);
-            var bestPeer = navigator.FindEntryPoint(layer, distanceCalculator);
-
-            var topCandidates = navigator.SearchLayer(bestPeer.Id, layer, parameters.MaxCandidates, distanceCalculator, id => id != nodeId && id != src.Id);
-            var bestNeighboursIds = parameters.Heuristic(topCandidates, data.Distance, data.MaxEdges(layer));
-
-            for (int i = 0; i < bestNeighboursIds.Count; ++i)
-            {
-                int newNeighbourId = bestNeighboursIds[i];
-                Connect(currentNode, data.Nodes[newNeighbourId], layer);
-                Connect(data.Nodes[newNeighbourId], currentNode, layer);
-            }
-        }
-
-        internal void RemoveOutEdge(Node target, Node badNeighbour, int layer)
+        private void RemoveOutEdge(Node target, Node badNeighbour, int layer)
         {
             lock (target.OutEdgesLock)
             {
@@ -126,7 +86,7 @@ namespace HNSWIndex
             }
         }
 
-        internal void RemoveInEdge(Node target, Node badNeighbour, int layer)
+        private void RemoveInEdge(Node target, Node badNeighbour, int layer)
         {
             lock (target.InEdgesLock)
             {
@@ -157,37 +117,49 @@ namespace HNSWIndex
         {
             lock (node.OutEdgesLock)
             {
+                // Try simple addition
                 node.OutEdges[layer].Add(neighbour.Id);
                 lock (neighbour.InEdgesLock)
                 {
                     neighbour.InEdges[layer].Add(node.Id);
                 }
+                // Connections exceeded limit from parameters
                 if (node.OutEdges[layer].Count > data.MaxEdges(layer))
                 {
-                    foreach (var neighbourId in node.OutEdges[layer])
-                    {
-                        lock (data.Nodes[neighbourId].InEdgesLock)
-                        {
-                            data.Nodes[neighbourId].InEdges[layer].Remove(node.Id);
-                        }
-                    }
+                    WipeRelationsWithNode(node, layer);
+                    RecomputeConnections(node, node.OutEdges[layer], layer);
+                    SetRelationsWithNode(node, layer);
+                }
+            }
+        }
 
-                    var candidates = new List<NodeDistance<TDistance>>(node.OutEdges[layer].Count);
-                    foreach (var neighbourId in node.OutEdges[layer])
-                    {
-                        candidates.Add(new NodeDistance<TDistance> { Dist = data.Distance(neighbourId, node.Id), Id = neighbourId });
-                    }
+        private void RecomputeConnections(Node node, List<int> candidates, int layer)
+        {
+            var candidatesDistances = new List<NodeDistance<TDistance>>(candidates.Count);
+            foreach (var neighbourId in candidates)
+                candidatesDistances.Add(new NodeDistance<TDistance> { Dist = data.Distance(neighbourId, node.Id), Id = neighbourId });
+            var newNeighbours = parameters.Heuristic(candidatesDistances, data.Distance, data.MaxEdges(layer));
+            node.OutEdges[layer] = newNeighbours;
+        }
 
-                    var selectedCandidates = parameters.Heuristic(candidates, data.Distance, data.MaxEdges(layer));
-                    node.OutEdges[layer] = selectedCandidates;
+        private void WipeRelationsWithNode(Node node, int layer)
+        {
+            foreach (var neighbourId in node.OutEdges[layer])
+            {
+                lock (data.Nodes[neighbourId].InEdgesLock)
+                {
+                    data.Nodes[neighbourId].InEdges[layer].Remove(node.Id);
+                }
+            }
+        }
 
-                    foreach (var neighbourId in node.OutEdges[layer])
-                    {
-                        lock (data.Nodes[neighbourId].InEdgesLock)
-                        {
-                            data.Nodes[neighbourId].InEdges[layer].Add(node.Id);
-                        }
-                    }
+        private void SetRelationsWithNode(Node node, int layer)
+        {
+            foreach (var neighbourId in node.OutEdges[layer])
+            {
+                lock (data.Nodes[neighbourId].InEdgesLock)
+                {
+                    data.Nodes[neighbourId].InEdges[layer].Add(node.Id);
                 }
             }
         }
