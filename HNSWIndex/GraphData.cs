@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
@@ -81,6 +81,7 @@ namespace HNSWIndex
 
         internal void RemoveItem(int itemId)
         {
+            Items.TryRemove(itemId, out _);
             lock (removedIndexesLock)
             {
                 RemovedIndexes.Add(itemId);
@@ -97,6 +98,7 @@ namespace HNSWIndex
                     {
                         var neighbourId = EntryPoint.OutEdges[layer].MaxBy(id => Nodes[id].OutEdges.Count);
                         SetEntryPoint(neighbourId);
+                        return;
                     }
                 }
             }

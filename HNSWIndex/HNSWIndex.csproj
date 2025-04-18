@@ -4,13 +4,13 @@
     <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Platforms>AnyCPU;x86</Platforms>
+    <Platforms>AnyCPU;x86;x64</Platforms>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageId>HNSWIndex</PackageId>
     <Title>HNSWIndex</Title>
-    <Version>1.1.4</Version>
+    <Version>1.1.5</Version>
     <Authors>Mateusz Skarupski</Authors>
     <Company />
     <Product>HNSWIndex</Product>
