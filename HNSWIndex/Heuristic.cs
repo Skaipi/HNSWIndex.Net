@@ -4,8 +4,8 @@ namespace HNSWIndex
 {
     internal static class Heuristic<TDistance> where TDistance : struct, IFloatingPoint<TDistance>
     {
-        private static IComparer<NodeDistance<TDistance>> FartherFirst = new DistanceComparer<TDistance>();
-        private static IComparer<NodeDistance<TDistance>> CloserFirst = new ReverseDistanceComparer<TDistance>();
+        internal static IComparer<NodeDistance<TDistance>> FartherFirst = new DistanceComparer<TDistance>();
+        internal static IComparer<NodeDistance<TDistance>> CloserFirst = new ReverseDistanceComparer<TDistance>();
 
         internal static List<int> DefaultHeuristic(List<NodeDistance<TDistance>> candidates, Func<int, int, TDistance> distanceFnc, int maxEdges)
         {
