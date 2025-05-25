@@ -40,39 +40,37 @@ namespace HNSWIndex
             }
         }
 
-        internal void RemoveConnections(int itemIndex)
+        internal void RemoveConnectionsAtLayer(Node removedNode, int layer)
         {
-            var removedNode = data.Nodes[itemIndex];
-            lock (removedNode.OutEdgesLock)
+            WipeRelationsWithNode(removedNode, layer);
+
+            var candidates = removedNode.OutEdges[layer];
+            for (int i = 0; i < removedNode.InEdges[layer].Count; i++)
             {
-                for (int layer = 0; layer <= removedNode.MaxLayer; layer++)
+                var activeNodeId = removedNode.InEdges[layer][i];
+                var activeNode = data.Nodes[activeNodeId];
+                var activeNeighbours = activeNode.OutEdges[layer];
+                RemoveOutEdge(activeNode, removedNode, layer);
+
+                // Select candidates for active node
+                var localCandidates = new List<NodeDistance<TDistance>>();
+                for (int j = 0; j < candidates.Count; j++)
                 {
-                    WipeRelationsWithNode(removedNode, layer);
+                    var candidateId = candidates[j];
+                    if (candidateId == activeNodeId || activeNeighbours.Contains(candidateId))
+                        continue;
 
-                    var mOnLayer = data.MaxEdges(layer);
-                    var children = removedNode.OutEdges[layer];
-                    for (int j = 0; j < removedNode.InEdges[layer].Count; j++)
+                    localCandidates.Add(new NodeDistance<TDistance> { Id = candidateId, Dist = data.Distance(candidateId, activeNodeId) });
+                }
+
+                var candidatesHeap = new BinaryHeap<NodeDistance<TDistance>>(localCandidates, Heuristic<TDistance>.CloserFirst);
+                while (candidatesHeap.Count > 0 && activeNeighbours.Count < data.MaxEdges(layer))
+                {
+                    var candidate = candidatesHeap.Pop();
+                    if (activeNeighbours.TrueForAll((n) => data.Distance(candidate.Id, n) > candidate.Dist))
                     {
-                        var activeNodeId = removedNode.InEdges[layer][j];
-                        var activeNode = data.Nodes[activeNodeId];
-                        var activeNodedEdges = activeNode.OutEdges[layer];
-                        RemoveOutEdge(activeNode, removedNode, layer);
-                        WipeRelationsWithNode(activeNode, layer);
-
-                        // Get valid candidates from children of removed node
-                        var candidates = new List<int>(children.Count);
-                        for (int i = 0; i < children.Count; i++)
-                        {
-                            int candidateId = children[i];
-                            if (candidateId == activeNodeId)
-                                continue;
-
-                            if (!activeNodedEdges.Contains(candidateId))
-                                candidates.Add(candidateId);
-                        }
-
-                        RecomputeConnections(activeNode, candidates.Concat(activeNodedEdges).ToList(), layer);
-                        SetRelationsWithNode(activeNode, layer);
+                        activeNode.OutEdges[layer].Add(candidate.Id);
+                        data.Nodes[candidate.Id].InEdges[layer].Add(activeNodeId);
                     }
                 }
             }
@@ -80,18 +78,8 @@ namespace HNSWIndex
 
         private void RemoveOutEdge(Node target, Node badNeighbour, int layer)
         {
-            lock (target.OutEdgesLock)
-            {
-                target.OutEdges[layer].Remove(badNeighbour.Id);
-            }
-        }
-
-        private void RemoveInEdge(Node target, Node badNeighbour, int layer)
-        {
-            lock (target.InEdgesLock)
-            {
-                target.InEdges[layer].Remove(badNeighbour.Id);
-            }
+            // Locks should be acquired beforehand. 
+            target.OutEdges[layer].Remove(badNeighbour.Id);
         }
 
         private void AddNewConnections(Node currNode)
@@ -144,22 +132,28 @@ namespace HNSWIndex
 
         private void WipeRelationsWithNode(Node node, int layer)
         {
-            foreach (var neighbourId in node.OutEdges[layer])
+            lock (node.OutEdgesLock)
             {
-                lock (data.Nodes[neighbourId].InEdgesLock)
+                foreach (var neighbourId in node.OutEdges[layer])
                 {
-                    data.Nodes[neighbourId].InEdges[layer].Remove(node.Id);
+                    lock (data.Nodes[neighbourId].InEdgesLock)
+                    {
+                        data.Nodes[neighbourId].InEdges[layer].Remove(node.Id);
+                    }
                 }
             }
         }
 
         private void SetRelationsWithNode(Node node, int layer)
         {
-            foreach (var neighbourId in node.OutEdges[layer])
+            lock (node.OutEdgesLock)
             {
-                lock (data.Nodes[neighbourId].InEdgesLock)
+                foreach (var neighbourId in node.OutEdges[layer])
                 {
-                    data.Nodes[neighbourId].InEdges[layer].Add(node.Id);
+                    lock (data.Nodes[neighbourId].InEdgesLock)
+                    {
+                        data.Nodes[neighbourId].InEdges[layer].Add(node.Id);
+                    }
                 }
             }
         }

@@ -54,13 +54,22 @@ namespace HNSWIndex
         /// </summary>
         public void Remove(int itemIndex)
         {
-            if (itemIndex == data.EntryPointId)
+            lock (data.entryPointLock)
             {
-                data.RemoveEntryPoint();
+                if (itemIndex == data.EntryPointId)
+                {
+                    data.RemoveEntryPoint();
+                }
             }
 
+            var item = data.Nodes[itemIndex];
+            for (int layer = item.MaxLayer; layer >= 0; layer--)
+            {
+                data.LockNodeNeighbourhood(item, layer);
+                connector.RemoveConnectionsAtLayer(item, layer);
+                data.UnlockNodeNeighbourhood(item, layer);
+            }
             data.RemoveItem(itemIndex);
-            connector.RemoveConnections(itemIndex);
         }
 
         /// <summary>
