@@ -3,8 +3,6 @@ name: Publish NuGet Package
 on:
   push:
     branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
 
 jobs:
   build-and-publish:
@@ -18,7 +16,6 @@ jobs:
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: |
-            7.0.x
             8.0.x
             9.0.x
 
