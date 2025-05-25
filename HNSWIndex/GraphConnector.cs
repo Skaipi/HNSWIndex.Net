@@ -64,12 +64,9 @@ namespace HNSWIndex
                 }
 
                 var candidatesHeap = new BinaryHeap<NodeDistance<TDistance>>(localCandidates, Heuristic<TDistance>.CloserFirst);
-                while (candidatesHeap.Count > 0)
+                while (candidatesHeap.Count > 0 && activeNeighbours.Count < data.MaxEdges(layer))
                 {
                     var candidate = candidatesHeap.Pop();
-                    if (activeNeighbours.Count >= data.MaxEdges(layer))
-                        break;
-
                     if (activeNeighbours.TrueForAll((n) => data.Distance(candidate.Id, n) > candidate.Dist))
                     {
                         activeNode.OutEdges[layer].Add(candidate.Id);
