@@ -4,6 +4,11 @@ using System.Runtime.CompilerServices;
 
 namespace HNSWIndex
 {
+    /// <summary>
+    /// Class storing the data containers for HNSW index.
+    /// All lock related members are ommitted from serialization 
+    /// and should be initialized in deserialization constructor.
+    /// </summary>
     internal class GraphData<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
     {
         internal event EventHandler<ReallocateEventArgs>? Reallocated;
@@ -40,6 +45,9 @@ namespace HNSWIndex
 
         private Func<TLabel, TLabel, TDistance> distanceFnc;
 
+        /// <summary>
+        /// Constructor for the graph data.
+        /// </summary>
         internal GraphData(Func<TLabel, TLabel, TDistance> distance, HNSWParameters<TDistance> parameters)
         {
             distanceFnc = distance;
@@ -54,6 +62,30 @@ namespace HNSWIndex
             Items = new ConcurrentDictionary<int, TLabel>(65536, parameters.CollectionSize); // 2^16 amount of locks
         }
 
+        /// <summary>
+        /// Constructor for the graph data from serialization snapshot.
+        /// </summary>
+        internal GraphData(GraphDataSnapshot<TLabel, TDistance> snapshot, Func<TLabel, TLabel, TDistance> distance, HNSWParameters<TDistance> parameters)
+        {
+            distanceFnc = distance;
+            rng = parameters.RandomSeed < 0 ? new Random() : new Random(parameters.RandomSeed);
+            distRate = parameters.DistributionRate;
+            maxEdges = parameters.MaxEdges;
+
+            Nodes = snapshot.Nodes ?? new List<Node>(parameters.CollectionSize);
+            Items = snapshot.Items ?? new ConcurrentDictionary<int, TLabel>(65536, parameters.CollectionSize);
+            RemovedIndexes = snapshot.RemovedIndexes ?? new HashSet<int>();
+            EntryPointId = snapshot.EntryPointId;
+            Capacity = snapshot.Capacity;
+
+            NeighbourhoodBitmap = new List<bool>(Capacity);
+            for (int i = 0; i < Nodes.Count; i++)
+                NeighbourhoodBitmap.Add(false);
+        }
+
+        /// <summary>
+        /// Add new item to the graph.
+        /// </summary>
         internal int AddItem(TLabel item)
         {
             int vacantId = -1;
@@ -117,16 +149,26 @@ namespace HNSWIndex
             }
         }
 
+        /// <summary>
+        /// Setter for entry point of the graph.
+        /// </summary>
         internal void SetEntryPoint(int epId)
         {
+            // TODO: Remove this method and write proper setter for EntryPointId.
             EntryPointId = epId;
         }
 
+        /// <summary>
+        /// Get the maximum layer of the graph.
+        /// </summary>
         internal int GetTopLayer()
         {
             return Nodes[EntryPointId].MaxLayer;
         }
 
+        /// <summary>
+        /// Constriction function for new node structure.
+        /// </summary>
         private Node NewNode(int index)
         {
             float random = 0;
@@ -152,8 +194,6 @@ namespace HNSWIndex
                 Id = index,
                 OutEdges = outEdges,
                 InEdges = inEdges,
-                OutEdgesLock = new object(),
-                InEdgesLock = new object(),
             };
         }
 
@@ -214,11 +254,17 @@ namespace HNSWIndex
             return result;
         }
 
+        /// <summary>
+        /// Get maximum number of edges at given layer.
+        /// </summary>
         internal int MaxEdges(int layer)
         {
             return layer == 0 ? maxEdges * 2 : maxEdges;
         }
 
+        /// <summary>
+        /// Wrapper for distance function working on indexes.
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal TDistance Distance(int a, int b)
         {

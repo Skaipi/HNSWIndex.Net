@@ -31,4 +31,8 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="protobuf-net" Version="3.2.52" />
+  </ItemGroup>
+
 </Project>
