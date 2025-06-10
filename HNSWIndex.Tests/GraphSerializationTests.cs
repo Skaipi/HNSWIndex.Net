@@ -24,7 +24,7 @@ namespace HNSWIndex.Tests
                 index.Add(vectors[i]);
 
             index.Serialize("GraphData.bin");
-            var decodedIndex = HNSWIndex<float[], float>.Deserialize("GraphData.bin");
+            var decodedIndex = HNSWIndex<float[], float>.Deserialize(Metrics.SquaredEuclideanMetric.Compute, "GraphData.bin");
 
             for (int i = 0; i < vectors.Count; i++)
             {
@@ -33,7 +33,7 @@ namespace HNSWIndex.Tests
                 for (int j = 0; j < originalResults.Count; j++)
                 {
                     Assert.AreEqual(originalResults[j].Id, decodeResults[j].Id);
-                    Assert.AreEqual(originalResults[j].Label, decodeResults[j].Label);
+                    Assert.IsTrue(originalResults[j].Label.SequenceEqual(decodeResults[j].Label));
                     Assert.AreEqual(originalResults[j].Distance, decodeResults[j].Distance);
                 }
             }
