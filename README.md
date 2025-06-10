@@ -1,4 +1,6 @@
 # HNSWIndex
+Perform KNN Query for millions of data points fast and with great accuracy. 
+
 **HNSWIndex** is a .NET library for constructing approximate nearest-neighbor (ANN) indices based on the _Hierarchical Navigable Small World_ (HNSW) graph. This data structure provides efficient similarity searches for large, high-dimensional datasets.
 
 ## Key Features
@@ -7,6 +9,7 @@
  - **Flexible Heuristic**: Pass heuristic function for nodes linking.
  - **Concurrency Support**: Thread safe graph building API 
  - **Configurable Parameters**: Fine-tune the indexing performance and memory trade-offs with parameters
+ - **Save and Load**: Save resulting structure on file system and restore later
 ## Installation
 Install via [NuGet](https://www.nuget.org/packages/HNSWIndex/):
 ```
@@ -52,4 +55,9 @@ Parallel.For(0, vectors.Count, i => {
 ```
 var k = 5;
 var results = index.KnnQuery(queryPoint, k);
+```
+### 5. Save and Load graph from file system
+```
+index.Serialize(pathToFile);
+var index = HNSWIndex<float[], float>.Deserialize(Metrics.SquaredEuclideanMetric.Compute, pathToFile);
 ```
