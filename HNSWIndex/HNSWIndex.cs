@@ -1,9 +1,11 @@
 ﻿using System.Numerics;
+using ProtoBuf;
 
 namespace HNSWIndex
 {
     public class HNSWIndex<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
     {
+        // Delegates are not serializable and should be set after deserialization
         private Func<TLabel, TLabel, TDistance> distanceFnc;
 
         private readonly HNSWParameters<TDistance> parameters;
@@ -26,6 +28,27 @@ namespace HNSWIndex
             data = new GraphData<TLabel, TDistance>(distFnc, hnswParameters);
             navigator = new GraphNavigator<TLabel, TDistance>(data);
             connector = new GraphConnector<TLabel, TDistance>(data, navigator, hnswParameters);
+
+            data.Reallocated += OnDataResized;
+        }
+
+        /// <summary>
+        /// Construct KNN search graph from serialized snapshot.
+        /// </summary>
+        internal HNSWIndex(Func<TLabel, TLabel, TDistance> distFnc, HNSWIndexSnapshot<TLabel, TDistance> snapshot)
+        {
+            if (snapshot.Parameters is null)
+                throw new ArgumentNullException(nameof(snapshot.Parameters), "Parameters cannot be null during deserialization.");
+
+            if (snapshot.DataSnapshot is null)
+                throw new ArgumentNullException(nameof(snapshot.DataSnapshot), "Data cannot be null during deserialization.");
+
+            distanceFnc = distFnc;
+            parameters = snapshot.Parameters;
+            data = new GraphData<TLabel, TDistance>(snapshot.DataSnapshot, distFnc, snapshot.Parameters);
+
+            navigator = new GraphNavigator<TLabel, TDistance>(data);
+            connector = new GraphConnector<TLabel, TDistance>(data, navigator, parameters);
 
             data.Reallocated += OnDataResized;
         }
@@ -124,6 +147,30 @@ namespace HNSWIndex
         public HNSWInfo GetInfo()
         {
             return new HNSWInfo(data.Nodes, data.RemovedIndexes, data.GetTopLayer());
+        }
+
+        /// <summary>
+        /// Serialize the graph snapshot image to a file.
+        /// </summary>
+        public void Serialize(string filePath)
+        {
+            using (var file = File.Create(filePath))
+            {
+                var snapshot = new HNSWIndexSnapshot<TLabel, TDistance>(parameters, data);
+                Serializer.Serialize(file, snapshot);
+            }
+        }
+
+        /// <summary>
+        /// Reconstruct the graph from a serialized snapshot image.
+        /// </summary>
+        public static HNSWIndex<TLabel, TDistance> Deserialize(Func<TLabel, TLabel, TDistance> distFnc, string filePath)
+        {
+            using (var file = File.OpenRead(filePath))
+            {
+                var snapshot = Serializer.Deserialize<HNSWIndexSnapshot<TLabel, TDistance>>(file);
+                return new HNSWIndex<TLabel, TDistance>(distFnc, snapshot);
+            }
         }
 
         private void OnDataResized(object? sender, ReallocateEventArgs e)
