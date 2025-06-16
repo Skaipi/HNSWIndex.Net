@@ -17,7 +17,7 @@ namespace HNSWIndex
         internal ConcurrentDictionary<int, TLabel>? Items { get; set; }
 
         [ProtoMember(3)]
-        internal HashSet<int>? RemovedIndexes { get; set; }
+        internal Queue<int>? RemovedIndexes { get; set; }
 
         [ProtoMember(4)]
         internal int EntryPointId = -1;
