@@ -21,7 +21,7 @@ namespace HNSWIndex
 
         private object removedIndexesLock = new object();
 
-        internal HashSet<int> RemovedIndexes { get; private set; }
+        internal Queue<int> RemovedIndexes { get; private set; }
 
         internal object NeighbourhoodBitmapLock = new object();
 
@@ -56,7 +56,7 @@ namespace HNSWIndex
             maxEdges = parameters.MaxEdges;
             Capacity = parameters.CollectionSize;
 
-            RemovedIndexes = new HashSet<int>();
+            RemovedIndexes = new Queue<int>();
             Nodes = new List<Node>(parameters.CollectionSize);
             NeighbourhoodBitmap = new List<bool>(parameters.CollectionSize);
             Items = new ConcurrentDictionary<int, TLabel>(65536, parameters.CollectionSize); // 2^16 amount of locks
@@ -74,7 +74,7 @@ namespace HNSWIndex
 
             Nodes = snapshot.Nodes ?? new List<Node>(parameters.CollectionSize);
             Items = snapshot.Items ?? new ConcurrentDictionary<int, TLabel>(65536, parameters.CollectionSize);
-            RemovedIndexes = snapshot.RemovedIndexes ?? new HashSet<int>();
+            RemovedIndexes = snapshot.RemovedIndexes ?? new Queue<int>();
             EntryPointId = snapshot.EntryPointId;
             Capacity = snapshot.Capacity;
 
@@ -93,8 +93,7 @@ namespace HNSWIndex
             {
                 if (RemovedIndexes.Count > 0)
                 {
-                    vacantId = RemovedIndexes.FirstOrDefault();
-                    RemovedIndexes.Remove(vacantId);
+                    vacantId = RemovedIndexes.Dequeue();
                 }
             }
 
@@ -126,7 +125,7 @@ namespace HNSWIndex
             Items.TryRemove(itemId, out _);
             lock (removedIndexesLock)
             {
-                RemovedIndexes.Add(itemId);
+                RemovedIndexes.Enqueue(itemId);
             }
         }
 

@@ -4,7 +4,7 @@
     {
         public List<LayerInfo> Layers;
 
-        internal HNSWInfo(List<Node> nodes, HashSet<int> removedNodes, int maxLayer)
+        internal HNSWInfo(List<Node> nodes, Queue<int> removedNodes, int maxLayer)
         {
             Layers = new List<LayerInfo>(maxLayer + 1);
             for (int layer = 0; layer <= maxLayer; layer++)
