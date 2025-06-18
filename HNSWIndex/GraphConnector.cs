@@ -21,7 +21,7 @@ namespace HNSWIndex
             Monitor.Enter(data.entryPointLock);
             if (data.EntryPointId < 0)
             {
-                data.SetEntryPoint(nodeId);
+                data.EntryPointId = nodeId;
                 Monitor.Exit(data.entryPointLock);
                 return;
             }
@@ -30,7 +30,7 @@ namespace HNSWIndex
             if (currNode.MaxLayer > data.GetTopLayer())
             {
                 AddNewConnections(currNode);
-                data.SetEntryPoint(nodeId);
+                data.EntryPointId = nodeId;
                 Monitor.Exit(data.entryPointLock);
             }
             else
@@ -42,6 +42,16 @@ namespace HNSWIndex
 
         internal void RemoveConnectionsAtLayer(Node removedNode, int layer)
         {
+            if (removedNode.Id == data.EntryPointId)
+            {
+                var replacementFound = data.TryReplaceEntryPoint(layer);
+                if (!replacementFound && layer == 0)
+                {
+                    if (data.Nodes.Count > 0) throw new InvalidOperationException("Delete on isolated enry point");
+                    data.EntryPointId = -1;
+                }
+            }
+
             WipeRelationsWithNode(removedNode, layer);
 
             var candidates = removedNode.OutEdges[layer];

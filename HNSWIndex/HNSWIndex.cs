@@ -73,26 +73,17 @@ namespace HNSWIndex
 
         /// <summary>
         /// Remove item with given index from graph structure
-        /// NOTE: This method does not support parallel removals
         /// </summary>
         public void Remove(int itemIndex)
         {
-            lock (data.entryPointLock)
-            {
-                if (itemIndex == data.EntryPointId)
-                {
-                    data.RemoveEntryPoint();
-                }
-            }
-
             var item = data.Nodes[itemIndex];
             for (int layer = item.MaxLayer; layer >= 0; layer--)
             {
                 data.LockNodeNeighbourhood(item, layer);
                 connector.RemoveConnectionsAtLayer(item, layer);
+                if (layer == 0) data.RemoveItem(itemIndex);
                 data.UnlockNodeNeighbourhood(item, layer);
             }
-            data.RemoveItem(itemIndex);
         }
 
         /// <summary>
