@@ -88,6 +88,7 @@ namespace HNSWIndex
         /// </summary>
         internal int AddItem(TLabel item)
         {
+            // Search for empty spot first
             int vacantId = -1;
             lock (removedIndexesLock)
             {
@@ -104,6 +105,7 @@ namespace HNSWIndex
                 return vacantId;
             }
 
+            // Allocate new spot
             vacantId = Nodes.Count;
             Nodes.Add(NewNode(vacantId));
             NeighbourhoodBitmap.Add(false);
@@ -130,31 +132,17 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Move role of the entry point to another point the graph.
+        /// Try to move the role of entry point to neighbor at given layer
         /// </summary>
-        internal void RemoveEntryPoint()
+        internal bool TryReplaceEntryPoint(int layer)
         {
-            lock (entryPointLock)
+            if (EntryPoint.OutEdges[layer].Count > 0)
             {
-                for (int layer = GetTopLayer(); layer >= 0; layer--)
-                {
-                    if (EntryPoint.OutEdges[layer].Count > 0)
-                    {
-                        var neighbourId = EntryPoint.OutEdges[layer].MaxBy(id => Nodes[id].OutEdges.Count);
-                        SetEntryPoint(neighbourId);
-                        return;
-                    }
-                }
+                var neighbourId = EntryPoint.OutEdges[layer].MaxBy(id => Nodes[id].OutEdges.Count);
+                EntryPointId = neighbourId;
+                return true;
             }
-        }
-
-        /// <summary>
-        /// Setter for entry point of the graph.
-        /// </summary>
-        internal void SetEntryPoint(int epId)
-        {
-            // TODO: Remove this method and write proper setter for EntryPointId.
-            EntryPointId = epId;
+            return false;
         }
 
         /// <summary>
@@ -240,14 +228,13 @@ namespace HNSWIndex
         internal bool NeighbourhoodIsBusy(Node node, int layer)
         {
             bool result = NeighbourhoodBitmap[node.Id];
-            for (int i = 0; i < node.OutEdges[layer].Count; i++)
+
+            foreach (var neighbourId in node.OutEdges[layer])
             {
-                var neighbourId = node.OutEdges[layer][i];
                 result |= NeighbourhoodBitmap[neighbourId];
             }
-            for (int i = 0; i < node.InEdges[layer].Count; i++)
+            foreach (var neighbourId in node.InEdges[layer])
             {
-                var neighbourId = node.InEdges[layer][i];
                 result |= NeighbourhoodBitmap[neighbourId];
             }
             return result;
