@@ -229,13 +229,24 @@ namespace HNSWIndex
         {
             bool result = NeighbourhoodBitmap[node.Id];
 
-            foreach (var neighbourId in node.OutEdges[layer])
+            try
             {
-                result |= NeighbourhoodBitmap[neighbourId];
+                foreach (var neighbourId in node.OutEdges[layer])
+                {
+                    result |= NeighbourhoodBitmap[neighbourId];
+                }
+                foreach (var neighbourId in node.InEdges[layer])
+                {
+                    result |= NeighbourhoodBitmap[neighbourId];
+                }
             }
-            foreach (var neighbourId in node.InEdges[layer])
+            catch (InvalidOperationException)
             {
-                result |= NeighbourhoodBitmap[neighbourId];
+                return false;
+            }
+            catch (Exception)
+            {
+                throw;
             }
             return result;
         }
