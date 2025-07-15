@@ -72,6 +72,19 @@ namespace HNSWIndex
         }
 
         /// <summary>
+        /// Add collection of items to the graph
+        /// </summary>
+        public int[] Add(List<TLabel> items)
+        {
+            var idArray = new int[items.Count];
+            Parallel.For(0, items.Count, (i) =>
+            {
+                idArray[i] = Add(items[i]);
+            });
+            return idArray;
+        }
+
+        /// <summary>
         /// Remove item with given index from graph structure
         /// </summary>
         public void Remove(int itemIndex)
@@ -84,6 +97,17 @@ namespace HNSWIndex
                 if (layer == 0) data.RemoveItem(itemIndex);
                 data.UnlockNodeNeighbourhood(item, layer);
             }
+        }
+
+        /// <summary>
+        /// Remove collection of items associated with indexes
+        /// </summary>
+        public void Remove(List<int> indexes)
+        {
+            Parallel.For(0, indexes.Count, (i) =>
+            {
+                Remove(indexes[i]);
+            });
         }
 
         /// <summary>
