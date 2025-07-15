@@ -100,6 +100,17 @@ namespace HNSWIndex
         }
 
         /// <summary>
+        /// Remove collection of items associated with indexes
+        /// </summary>
+        public void Remove(List<int> indexes)
+        {
+            Parallel.For(0, indexes.Count, (i) =>
+            {
+                Remove(indexes[i]);
+            });
+        }
+
+        /// <summary>
         /// Get list of items inserted into the graph structure
         /// </summary>
         public List<TLabel> Items()
