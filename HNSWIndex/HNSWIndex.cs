@@ -72,6 +72,19 @@ namespace HNSWIndex
         }
 
         /// <summary>
+        /// Add collection of items to the graph
+        /// </summary>
+        public int[] Add(List<TLabel> items)
+        {
+            var idArray = new int[items.Count];
+            Parallel.For(0, items.Count, (i) =>
+            {
+                idArray[i] = Add(items[i]);
+            });
+            return idArray;
+        }
+
+        /// <summary>
         /// Remove item with given index from graph structure
         /// </summary>
         public void Remove(int itemIndex)
