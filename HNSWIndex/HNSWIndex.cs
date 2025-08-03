@@ -128,9 +128,10 @@ namespace HNSWIndex
 
         /// <summary>
         /// Get K nearest neighbours of query point. 
-        // Optionally probide filter function to ignore certain labels.
+        /// Optionally probide filter function to ignore certain labels.
+        /// Layer parameters indicates at which layer search should be performed (0 - base layer)
         /// </summary>
-        public List<KNNResult<TLabel, TDistance>> KnnQuery(TLabel query, int k, Func<TLabel, bool>? filterFnc = null)
+        public List<KNNResult<TLabel, TDistance>> KnnQuery(TLabel query, int k, Func<TLabel, bool>? filterFnc = null, int layer = 0)
         {
             if (data.Nodes.Count - data.RemovedIndexes.Count <= 0) return new List<KNNResult<TLabel, TDistance>>();
 
@@ -146,8 +147,8 @@ namespace HNSWIndex
 
             var neighboursAmount = Math.Max(parameters.MinNN, k);
             var distCalculator = new DistanceCalculator<TLabel, TDistance>(queryDistance, query);
-            var ep = navigator.FindEntryPoint(0, distCalculator);
-            var topCandidates = navigator.SearchLayer(ep.Id, 0, neighboursAmount, distCalculator, indexFilter);
+            var ep = navigator.FindEntryPoint(layer, distCalculator);
+            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighboursAmount, distCalculator, indexFilter);
 
             if (k < neighboursAmount)
             {
