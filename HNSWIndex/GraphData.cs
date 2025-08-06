@@ -43,6 +43,8 @@ namespace HNSWIndex
 
         private int maxEdges;
 
+        private bool zeroLayerGuaranteed;
+
         private Func<TLabel, TLabel, TDistance> distanceFnc;
 
         /// <summary>
@@ -54,6 +56,7 @@ namespace HNSWIndex
             rng = parameters.RandomSeed < 0 ? new Random() : new Random(parameters.RandomSeed);
             distRate = parameters.DistributionRate;
             maxEdges = parameters.MaxEdges;
+            zeroLayerGuaranteed = parameters.ZeroLayerGuaranteed;
             Capacity = parameters.CollectionSize;
 
             RemovedIndexes = new Queue<int>();
@@ -71,6 +74,7 @@ namespace HNSWIndex
             rng = parameters.RandomSeed < 0 ? new Random() : new Random(parameters.RandomSeed);
             distRate = parameters.DistributionRate;
             maxEdges = parameters.MaxEdges;
+            zeroLayerGuaranteed = parameters.ZeroLayerGuaranteed;
 
             Nodes = snapshot.Nodes ?? new List<Node>(parameters.CollectionSize);
             Items = snapshot.Items ?? new ConcurrentDictionary<int, TLabel>(65536, parameters.CollectionSize);
@@ -88,6 +92,9 @@ namespace HNSWIndex
         /// </summary>
         internal int AddItem(TLabel item)
         {
+            var topLayer = GetRandomLayer();
+            if (topLayer < 0) return -1;
+
             // Search for empty spot first
             int vacantId = -1;
             lock (removedIndexesLock)
@@ -100,14 +107,14 @@ namespace HNSWIndex
 
             if (vacantId >= 0)
             {
-                Nodes[vacantId] = NewNode(vacantId);
+                Nodes[vacantId] = NewNode(vacantId, topLayer);
                 Items.TryAdd(vacantId, item);
                 return vacantId;
             }
 
             // Allocate new spot
             vacantId = Nodes.Count;
-            Nodes.Add(NewNode(vacantId));
+            Nodes.Add(NewNode(vacantId, topLayer));
             NeighbourhoodBitmap.Add(false);
             Items.TryAdd(vacantId, item);
             if (Nodes.Count > Capacity)
@@ -136,7 +143,9 @@ namespace HNSWIndex
         /// </summary>
         internal void UpdateItem(int itemId, TLabel label)
         {
-            Nodes[itemId] = NewNode(itemId);
+            var topLayer = GetRandomLayer();
+            if (topLayer < 0) return;
+            Nodes[itemId] = NewNode(itemId, topLayer);
             Items[itemId] = label;
         }
 
@@ -163,18 +172,24 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Constriction function for new node structure.
+        /// Take random layer based on parameter's distribution rate.
+        /// If ZeroLayerGuaranteed flag is set then all points should be at least at layer zero.
         /// </summary>
-        private Node NewNode(int index)
+        private int GetRandomLayer()
         {
             float random = 0;
             lock (rngLock)
             {
                 random = rng.NextSingle();
             }
+            return zeroLayerGuaranteed ? (int)(-Math.Log(random) * distRate) : (int)(-Math.Log(random) * distRate) - 1;
+        }
 
-            int topLayer = (int)(-Math.Log(random) * distRate);
-
+        /// <summary>
+        /// Constriction function for new node structure.
+        /// </summary>
+        private Node NewNode(int index, int topLayer)
+        {
             var outEdges = new List<List<int>>(topLayer + 1);
             var inEdges = new List<List<int>>(topLayer + 1);
 

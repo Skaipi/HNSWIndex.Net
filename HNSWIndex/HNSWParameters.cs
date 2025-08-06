@@ -47,5 +47,11 @@ namespace HNSWIndex
         /// </summary>
         [ProtoMember(7)]
         public Func<List<NodeDistance<TDistance>>, Func<int, int, TDistance>, int, List<int>> Heuristic { get; set; } = Heuristic<TDistance>.DefaultHeuristic;
+
+        /// <summary>
+        /// Indicates if all points are guaranteed
+        /// </summary>
+        [ProtoMember(8)]
+        public bool ZeroLayerGuaranteed = true;
     }
 }
