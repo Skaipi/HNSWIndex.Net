@@ -7,8 +7,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HNSWIndex", "HNSWIndex.cspr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HNSWIndex.Tests", "..\HNSWIndex.Tests\HNSWIndex.Tests.csproj", "{91927842-1C3B-43B6-B1FA-003826FAF8AD}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HNSWIndex.Profiler", "..\HNSWIndex.Profiler\HNSWIndex.Profiler.csproj", "{E25356A8-CC8D-4910-8245-AF4907B7648D}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -53,22 +51,6 @@ Global
 		{91927842-1C3B-43B6-B1FA-003826FAF8AD}.Release|x64.Build.0 = Release|Any CPU
 		{91927842-1C3B-43B6-B1FA-003826FAF8AD}.Release|x86.ActiveCfg = Release|Any CPU
 		{91927842-1C3B-43B6-B1FA-003826FAF8AD}.Release|x86.Build.0 = Release|Any CPU
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Debug|ARM32.ActiveCfg = Debug|ARM32
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Debug|ARM32.Build.0 = Debug|ARM32
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Debug|x64.Build.0 = Debug|Any CPU
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Debug|x86.Build.0 = Debug|Any CPU
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Release|Any CPU.Build.0 = Release|Any CPU
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Release|ARM32.ActiveCfg = Release|ARM32
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Release|ARM32.Build.0 = Release|ARM32
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Release|x64.ActiveCfg = Release|Any CPU
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Release|x64.Build.0 = Release|Any CPU
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Release|x86.ActiveCfg = Release|Any CPU
-		{E25356A8-CC8D-4910-8245-AF4907B7648D}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
