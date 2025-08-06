@@ -132,6 +132,15 @@ namespace HNSWIndex
         }
 
         /// <summary>
+        /// Replace node at given id
+        /// </summary>
+        internal void UpdateItem(int itemId, TLabel label)
+        {
+            Nodes[itemId] = NewNode(itemId);
+            Items[itemId] = label;
+        }
+
+        /// <summary>
         /// Try to move the role of entry point to neighbor at given layer
         /// </summary>
         internal bool TryReplaceEntryPoint(int layer)

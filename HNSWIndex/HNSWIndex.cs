@@ -111,6 +111,39 @@ namespace HNSWIndex
         }
 
         /// <summary>
+        /// Update items at given indexes with new labels 
+        /// </summary>
+        public void Update(IList<int> indexes, IList<TLabel> labels)
+        {
+            if (indexes.Count != labels.Count) throw new ArgumentException("Update collections size mismatch");
+
+            // Remove connections without removing data
+            Parallel.For(0, indexes.Count, (i) =>
+            {
+                var item = data.Nodes[indexes[i]];
+                for (int layer = item.MaxLayer; layer >= 0; layer--)
+                {
+                    data.LockNodeNeighbourhood(item, layer);
+                    connector.RemoveConnectionsAtLayer(item, layer);
+                    data.UnlockNodeNeighbourhood(item, layer);
+                }
+            });
+
+            // Insert node with new label with the same index
+            Parallel.For(0, indexes.Count, (i) =>
+            {
+                var index = indexes[i];
+                var label = labels[i];
+                data.UpdateItem(index, label);
+
+                lock (data.Nodes[index].OutEdgesLock)
+                {
+                    connector.ConnectNewNode(index);
+                }
+            });
+        }
+
+        /// <summary>
         /// Get list of items inserted into the graph structure
         /// </summary>
         public List<TLabel> Items()
