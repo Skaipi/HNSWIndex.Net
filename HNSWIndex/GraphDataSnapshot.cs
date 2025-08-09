@@ -1,5 +1,7 @@
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using ProtoBuf;
 
 namespace HNSWIndex
@@ -8,13 +10,13 @@ namespace HNSWIndex
     /// Wrapper for GraphData for serialization.
     /// </summary>
     [ProtoContract]
-    internal class GraphDataSnapshot<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
+    internal class GraphDataSnapshot<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance> where TLabel : IList
     {
         [ProtoMember(1)]
-        internal List<Node>? Nodes { get; set; }
+        internal Node[]? Nodes { get; set; }
 
         [ProtoMember(2)]
-        internal ConcurrentDictionary<int, TLabel>? Items { get; set; }
+        internal NestedArrayWrapper<TLabel>[]? Items { get; set; }
 
         [ProtoMember(3)]
         internal Queue<int>? RemovedIndexes { get; set; }
@@ -25,15 +27,39 @@ namespace HNSWIndex
         [ProtoMember(5)]
         internal int Capacity;
 
+        [ProtoMember(6)]
+        internal int Length;
+
+        internal TLabel[]? ParsedItems
+        {
+            get
+            {
+                var items = Items?.Select(i => i.Values).ToArray();
+                Array.Resize(ref items, Capacity);
+                return items;
+            }
+        }
+
+        internal Node[]? ParsedNodes
+        {
+            get
+            {
+                var nodes = Nodes;
+                Array.Resize(ref nodes, Capacity);
+                return nodes;
+            }
+        }
+
         internal GraphDataSnapshot() { }
 
         internal GraphDataSnapshot(GraphData<TLabel, TDistance> data)
         {
-            Nodes = data.Nodes;
-            Items = data.Items;
+            Nodes = data.Nodes.Where(n => n is not null).ToArray();
+            Items = data.Items.Where(i => i is not null).Select(i => new NestedArrayWrapper<TLabel>(i)).ToArray();
             RemovedIndexes = data.RemovedIndexes;
             EntryPointId = data.EntryPointId;
             Capacity = data.Capacity;
+            Length = data.Length;
         }
     }
 }

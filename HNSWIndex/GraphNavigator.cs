@@ -1,8 +1,9 @@
-﻿using System.Numerics;
+﻿using System.Collections;
+using System.Numerics;
 
 namespace HNSWIndex
 {
-    internal class GraphNavigator<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
+    internal class GraphNavigator<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance> where TLabel : IList
     {
         private static Func<int, bool> noFilter = _ => true;
 
@@ -19,7 +20,7 @@ namespace HNSWIndex
             closerFirst = new ReverseDistanceComparer<TDistance>();
         }
 
-        internal Node FindEntryPoint<T>(int dstLayer, DistanceCalculator<T, TDistance> dstDistance)
+        internal Node FindEntryPoint<T>(int dstLayer, DistanceCalculator<T, TDistance> dstDistance, bool locking = true)
         {
             var bestPeer = data.EntryPoint;
             var currDist = dstDistance.From(bestPeer.Id);
@@ -30,21 +31,19 @@ namespace HNSWIndex
                 while (changed)
                 {
                     changed = false;
-                    lock (data.Nodes[bestPeer.Id].OutEdgesLock)
-                    {
-                        List<int> connections = bestPeer.OutEdges[level];
-                        int size = connections.Count;
+                    using var _ = new OptionalLock(locking, data.Nodes[bestPeer.Id].OutEdgesLock);
+                    List<int> connections = bestPeer.OutEdges[level];
+                    int size = connections.Count;
 
-                        for (int i = 0; i < size; i++)
+                    for (int i = 0; i < size; i++)
+                    {
+                        int cand = connections[i];
+                        var d = dstDistance.From(cand);
+                        if (d < currDist)
                         {
-                            int cand = connections[i];
-                            var d = dstDistance.From(cand);
-                            if (d < currDist)
-                            {
-                                currDist = d;
-                                bestPeer = data.Nodes[cand];
-                                changed = true;
-                            }
+                            currDist = d;
+                            bestPeer = data.Nodes[cand];
+                            changed = true;
                         }
                     }
                 }
@@ -53,7 +52,35 @@ namespace HNSWIndex
             return bestPeer;
         }
 
-        internal List<NodeDistance<TDistance>> SearchLayer<T>(int entryPointId, int layer, int k, DistanceCalculator<T, TDistance> distanceCalculator, Func<int, bool>? filterFnc = null)
+        internal Node FindEntryAtLayer<T>(int layer, Node startNode, DistanceCalculator<T, TDistance> dstDistance, bool locking = true)
+        {
+            // TODO: Check if this logic can be extracted to regular FindEndtryPoint
+            var bestPeer = startNode;
+            var currDist = dstDistance.From(bestPeer.Id);
+            bool changed = true;
+            while (changed)
+            {
+                changed = false;
+                using var _ = new OptionalLock(locking, data.Nodes[bestPeer.Id].OutEdgesLock);
+                List<int> connections = bestPeer.OutEdges[layer];
+                int size = connections.Count;
+
+                for (int i = 0; i < size; i++)
+                {
+                    int cand = connections[i];
+                    var d = dstDistance.From(cand);
+                    if (d < currDist)
+                    {
+                        currDist = d;
+                        bestPeer = data.Nodes[cand];
+                        changed = true;
+                    }
+                }
+            }
+            return bestPeer;
+        }
+
+        internal List<NodeDistance<TDistance>> SearchLayer<T>(int entryPointId, int layer, int k, DistanceCalculator<T, TDistance> distanceCalculator, Func<int, bool>? filterFnc = null, bool locking = true)
         {
             filterFnc ??= noFilter;
             var topCandidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k), fartherFirst);
@@ -84,37 +111,35 @@ namespace HNSWIndex
                 }
                 candidates.Pop(); // Delay heap reordering in case of early break 
 
-                // expand candidate
-                lock (data.Nodes[closestCandidate.Id].OutEdgesLock)
+                // take lock if needed and expand candidate
+                using var _ = new OptionalLock(locking, data.Nodes[closestCandidate.Id].OutEdgesLock);
+                var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer];
+
+                for (int i = 0; i < neighboursIds.Count; ++i)
                 {
-                    var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer];
+                    int neighbourId = neighboursIds[i];
+                    if (visitedList.Contains(neighbourId)) continue;
 
-                    for (int i = 0; i < neighboursIds.Count; ++i)
+                    var neighbourDistance = distanceCalculator.From(neighbourId);
+
+                    // enqueue perspective neighbours to expansion list
+                    if (topCandidates.Count < k || neighbourDistance < farthestResultDist)
                     {
-                        int neighbourId = neighboursIds[i];
-                        if (visitedList.Contains(neighbourId)) continue;
+                        var selectedCandidate = new NodeDistance<TDistance> { Dist = neighbourDistance, Id = neighbourId };
+                        candidates.Push(selectedCandidate);
 
-                        var neighbourDistance = distanceCalculator.From(neighbourId);
+                        if (filterFnc(selectedCandidate.Id))
+                            topCandidates.Push(selectedCandidate);
 
-                        // enqueue perspective neighbours to expansion list
-                        if (topCandidates.Count < k || neighbourDistance < farthestResultDist)
-                        {
-                            var selectedCandidate = new NodeDistance<TDistance> { Dist = neighbourDistance, Id = neighbourId };
-                            candidates.Push(selectedCandidate);
+                        if (topCandidates.Count > k)
+                            topCandidates.Pop();
 
-                            if (filterFnc(selectedCandidate.Id))
-                                topCandidates.Push(selectedCandidate);
-
-                            if (topCandidates.Count > k)
-                                topCandidates.Pop();
-
-                            if (topCandidates.Count > 0)
-                                farthestResultDist = topCandidates.Buffer[0].Dist;
-                        }
-
-                        // update visited list
-                        visitedList.Add(neighbourId);
+                        if (topCandidates.Count > 0)
+                            farthestResultDist = topCandidates.Buffer[0].Dist;
                     }
+
+                    // update visited list
+                    visitedList.Add(neighbourId);
                 }
             }
 

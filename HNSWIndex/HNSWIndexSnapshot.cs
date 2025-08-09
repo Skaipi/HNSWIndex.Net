@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Numerics;
 using ProtoBuf;
 
@@ -7,7 +8,7 @@ namespace HNSWIndex
     /// Wrapper for HNSWIndex for serialization.
     /// </summary>
     [ProtoContract]
-    internal class HNSWIndexSnapshot<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
+    internal class HNSWIndexSnapshot<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance> where TLabel : IList
     {
         [ProtoMember(1)]
         internal HNSWParameters<TDistance>? Parameters { get; set; }

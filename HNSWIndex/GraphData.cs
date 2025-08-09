@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+﻿using System.Collections;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
@@ -9,15 +9,15 @@ namespace HNSWIndex
     /// All lock related members are ommitted from serialization 
     /// and should be initialized in deserialization constructor.
     /// </summary>
-    internal class GraphData<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
+    internal class GraphData<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance> where TLabel : IList
     {
         internal event EventHandler<ReallocateEventArgs>? Reallocated;
 
         internal object indexLock = new object();
 
-        internal List<Node> Nodes { get; private set; }
+        internal Node[] Nodes { get; private set; }
 
-        internal ConcurrentDictionary<int, TLabel> Items { get; private set; }
+        internal TLabel[] Items { get; private set; }
 
         private object removedIndexesLock = new object();
 
@@ -34,6 +34,8 @@ namespace HNSWIndex
         internal Node EntryPoint => Nodes[EntryPointId];
 
         internal int Capacity;
+
+        internal int Length = 0;
 
         private object rngLock = new object();
 
@@ -60,9 +62,9 @@ namespace HNSWIndex
             Capacity = parameters.CollectionSize;
 
             RemovedIndexes = new Queue<int>();
-            Nodes = new List<Node>(parameters.CollectionSize);
+            Nodes = new Node[parameters.CollectionSize];
             NeighbourhoodBitmap = new List<bool>(parameters.CollectionSize);
-            Items = new ConcurrentDictionary<int, TLabel>(65536, parameters.CollectionSize); // 2^16 amount of locks
+            Items = new TLabel[parameters.CollectionSize];
         }
 
         /// <summary>
@@ -76,14 +78,15 @@ namespace HNSWIndex
             maxEdges = parameters.MaxEdges;
             zeroLayerGuaranteed = parameters.ZeroLayerGuaranteed;
 
-            Nodes = snapshot.Nodes ?? new List<Node>(parameters.CollectionSize);
-            Items = snapshot.Items ?? new ConcurrentDictionary<int, TLabel>(65536, parameters.CollectionSize);
+            Nodes = snapshot.ParsedNodes ?? new Node[parameters.CollectionSize];
+            Items = snapshot.ParsedItems ?? new TLabel[parameters.CollectionSize];
             RemovedIndexes = snapshot.RemovedIndexes ?? new Queue<int>();
             EntryPointId = snapshot.EntryPointId;
             Capacity = snapshot.Capacity;
+            Length = snapshot.Length;
 
             NeighbourhoodBitmap = new List<bool>(Capacity);
-            for (int i = 0; i < Nodes.Count; i++)
+            for (int i = 0; i < Nodes.Length; i++)
                 NeighbourhoodBitmap.Add(false);
         }
 
@@ -108,18 +111,24 @@ namespace HNSWIndex
             if (vacantId >= 0)
             {
                 Nodes[vacantId] = NewNode(vacantId, topLayer);
-                Items.TryAdd(vacantId, item);
+                Items[vacantId] = item;
                 return vacantId;
             }
 
             // Allocate new spot
-            vacantId = Nodes.Count;
-            Nodes.Add(NewNode(vacantId, topLayer));
+            vacantId = Length++;
+            Nodes[vacantId] = NewNode(vacantId, topLayer);
+            Items[vacantId] = item;
             NeighbourhoodBitmap.Add(false);
-            Items.TryAdd(vacantId, item);
-            if (Nodes.Count > Capacity)
+            if (Length >= Capacity)
             {
-                Capacity = Nodes.Capacity;
+                Capacity *= 2;
+                var nodes = Nodes;
+                var items = Items;
+                Array.Resize(ref nodes, Capacity);
+                Array.Resize(ref items, Capacity);
+                Nodes = nodes;
+                Items = items;
                 Reallocated?.Invoke(this, new ReallocateEventArgs(Capacity));
             }
             return vacantId;
@@ -131,7 +140,7 @@ namespace HNSWIndex
         /// </summary>
         internal void RemoveItem(int itemId)
         {
-            Items.TryRemove(itemId, out _);
+            Items[itemId] = default!;
             lock (removedIndexesLock)
             {
                 RemovedIndexes.Enqueue(itemId);
@@ -141,12 +150,13 @@ namespace HNSWIndex
         /// <summary>
         /// Replace node at given id
         /// </summary>
-        internal void UpdateItem(int itemId, TLabel label)
+        internal int UpdateItem(int itemId, TLabel label)
         {
             var topLayer = GetRandomLayer();
-            if (topLayer < 0) return;
+            if (topLayer < 0) return -1;
             Nodes[itemId] = NewNode(itemId, topLayer);
             Items[itemId] = label;
+            return itemId;
         }
 
         /// <summary>

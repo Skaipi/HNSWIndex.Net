@@ -1,8 +1,9 @@
-﻿using System.Numerics;
+﻿using System.Collections;
+using System.Numerics;
 
 namespace HNSWIndex
 {
-    internal class GraphConnector<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
+    internal class GraphConnector<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance> where TLabel : IList
     {
         private GraphData<TLabel, TDistance> data;
         private GraphNavigator<TLabel, TDistance> navigator;
@@ -47,7 +48,7 @@ namespace HNSWIndex
                 var replacementFound = data.TryReplaceEntryPoint(layer);
                 if (!replacementFound && layer == 0)
                 {
-                    if (data.Nodes.Count > 0) throw new InvalidOperationException("Delete on isolated enry point");
+                    if (data.Nodes.Length > 0) throw new InvalidOperationException("Delete on isolated enry point");
                     data.EntryPointId = -1;
                 }
             }

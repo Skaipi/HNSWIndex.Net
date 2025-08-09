@@ -1,9 +1,10 @@
-﻿using System.Numerics;
+﻿using System.Collections;
+using System.Numerics;
 using ProtoBuf;
 
 namespace HNSWIndex
 {
-    public class HNSWIndex<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
+    public class HNSWIndex<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance> where TLabel : IList
     {
         // Delegates are not serializable and should be set after deserialization
         private Func<TLabel, TLabel, TDistance> distanceFnc;
@@ -63,6 +64,7 @@ namespace HNSWIndex
             {
                 itemId = data.AddItem(item);
             }
+            if (itemId == -1) return itemId;
 
             lock (data.Nodes[itemId].OutEdgesLock)
             {
@@ -134,7 +136,8 @@ namespace HNSWIndex
             {
                 var index = indexes[i];
                 var label = labels[i];
-                data.UpdateItem(index, label);
+                var id = data.UpdateItem(index, label);
+                if (id == -1) return;
 
                 lock (data.Nodes[index].OutEdgesLock)
                 {
@@ -148,7 +151,7 @@ namespace HNSWIndex
         /// </summary>
         public List<TLabel> Items()
         {
-            return data.Items.Values.ToList();
+            return data.Items.ToList();
         }
 
         /// <summary>
@@ -161,12 +164,12 @@ namespace HNSWIndex
 
         /// <summary>
         /// Get K nearest neighbours of query point. 
-        /// Optionally probide filter function to ignore certain labels.
+        /// Optionally provide filter function to ignore certain labels.
         /// Layer parameters indicates at which layer search should be performed (0 - base layer)
         /// </summary>
         public List<KNNResult<TLabel, TDistance>> KnnQuery(TLabel query, int k, Func<TLabel, bool>? filterFnc = null, int layer = 0)
         {
-            if (data.Nodes.Count - data.RemovedIndexes.Count <= 0) return new List<KNNResult<TLabel, TDistance>>();
+            if (data.Nodes.Length - data.RemovedIndexes.Count <= 0) return new List<KNNResult<TLabel, TDistance>>();
 
             Func<int, bool> indexFilter = _ => true;
             if (filterFnc is not null)
@@ -180,14 +183,39 @@ namespace HNSWIndex
 
             var neighboursAmount = Math.Max(parameters.MinNN, k);
             var distCalculator = new DistanceCalculator<TLabel, TDistance>(queryDistance, query);
-            var ep = navigator.FindEntryPoint(layer, distCalculator);
-            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighboursAmount, distCalculator, indexFilter);
+            var ep = navigator.FindEntryPoint(layer, distCalculator, false);
+            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighboursAmount, distCalculator, indexFilter, false);
 
             if (k < neighboursAmount)
             {
                 return topCandidates.OrderBy(c => c.Dist).Take(k).ToList().ConvertAll(c => new KNNResult<TLabel, TDistance>(c.Id, data.Items[c.Id], c.Dist));
             }
             return topCandidates.ConvertAll(c => new KNNResult<TLabel, TDistance>(c.Id, data.Items[c.Id], c.Dist));
+        }
+
+        /// <summary>
+        /// Perform knn query over all layers in graph. Optionally provide range of layers with max and min layer parameters.
+        /// </summary>
+        public List<KNNResult<TLabel, TDistance>>[] MultiLayerKnnQuery(TLabel query, int k, int maxLayer = int.MaxValue, int minLayer = 0)
+        {
+            // TODO: Add checks for invalid max and min layer
+            if (data.Nodes.Length - data.RemovedIndexes.Count <= 0 || k < 1) return [];
+
+            TDistance queryDistance(int nodeId, TLabel label)
+            {
+                return distanceFnc(data.Items[nodeId], label);
+            }
+
+            var distCalculator = new DistanceCalculator<TLabel, TDistance>(queryDistance, query);
+            var ep = data.EntryPoint.MaxLayer >= maxLayer ? navigator.FindEntryPoint(maxLayer, distCalculator, false) : data.EntryPoint;
+            var result = new List<KNNResult<TLabel, TDistance>>[Math.Min(ep.MaxLayer, maxLayer) + 1];
+            for (int layer = Math.Min(ep.MaxLayer, maxLayer); layer >= minLayer; layer--)
+            {
+                ep = navigator.FindEntryAtLayer(layer, ep, distCalculator, false);
+                var candidates = navigator.SearchLayer(ep.Id, layer, k, distCalculator, (index) => index != ep.Id, false); // Search closest neighbors except entry point
+                result[layer] = candidates.ConvertAll(c => new KNNResult<TLabel, TDistance>(c.Id, data.Items[c.Id], c.Dist));
+            }
+            return result;
         }
 
         /// <summary>
