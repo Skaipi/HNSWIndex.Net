@@ -19,7 +19,7 @@
             Assert.IsNotNull(vectors);
 
             var parameters = new HNSWParameters<float>() { CollectionSize = 10 };
-            var index = new HNSWIndex<float[], float>(Metrics.SquaredEuclideanMetric.Compute);
+            var index = new HNSWIndex<float[], float>(Metrics.SquaredEuclideanMetric.Compute, parameters);
 
             for (int i = 0; i < vectors.Count; i++)
             {
@@ -53,7 +53,7 @@
             Assert.IsNotNull(vectors);
 
             var parameters = new HNSWParameters<float>() { CollectionSize = 10 };
-            var index = new HNSWIndex<float[], float>(Metrics.SquaredEuclideanMetric.Compute);
+            var index = new HNSWIndex<float[], float>(Metrics.SquaredEuclideanMetric.Compute, parameters);
 
             Parallel.For(0, vectors.Count, i =>
             {
