@@ -36,6 +36,8 @@ namespace HNSWIndex
 
         internal int Length = 0;
 
+        internal int Count = 0;
+
         private object rngLock = new object();
 
         private Random rng;
@@ -108,6 +110,7 @@ namespace HNSWIndex
             {
                 Nodes[vacantId] = NewNode(vacantId, topLayer);
                 Items[vacantId] = item;
+                Count++;
                 return vacantId;
             }
 
@@ -128,6 +131,7 @@ namespace HNSWIndex
                 Reallocated?.Invoke(this, new ReallocateEventArgs(Capacity));
                 GraphLocker.UpdateCapacity(Capacity);
             }
+            Count++;
             return vacantId;
         }
 
@@ -141,6 +145,7 @@ namespace HNSWIndex
             lock (removedIndexesLock)
             {
                 RemovedIndexes.Enqueue(itemId);
+                Count--;
             }
         }
 
@@ -231,6 +236,24 @@ namespace HNSWIndex
         internal TDistance Distance(int a, int b)
         {
             return distanceFnc(Items[a], Items[b]);
+        }
+
+        /// <summary>
+        /// Proxy for distance function
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal TDistance Distance(TLabel a, TLabel b)
+        {
+            return distanceFnc(a, b);
+        }
+
+        /// <summary>
+        /// Proxy for distance between graph vertex and arbitrary point
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal TDistance Distance(int a, TLabel b)
+        {
+            return distanceFnc(Items[a], b);
         }
     }
 }
