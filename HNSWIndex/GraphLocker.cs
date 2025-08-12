@@ -1,11 +1,13 @@
 
 namespace HNSWIndex
 {
+    /// <summary>
+    /// Lock immediate neighbors of node in the graph.
+    /// </summary>
     internal class GraphRegionLocker
     {
         private readonly object bitmapLock = new object();
         private readonly List<bool> busy;
-        private readonly ReaderWriterLockSlim topology = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
 
         public GraphRegionLocker(int initCapacity)
         {
@@ -21,14 +23,9 @@ namespace HNSWIndex
             busy.AddRange(new bool[newCapacity - busy.Count]);
         }
 
-        public void TopologyWrite(Action body)
-        {
-            topology.EnterWriteLock();
-            try { body(); }
-            finally { topology.ExitWriteLock(); }
-        }
-
-        // Acquire: snapshot neighbours, then lock bits
+        /// <summary>
+        /// Acquire regional lock around node at specific layer
+        /// </summary>
         public IDisposable LockNodeNeighbourhood(Node node, int layer)
         {
             while (true)
@@ -75,6 +72,9 @@ namespace HNSWIndex
             }
         }
 
+        /// <summary>
+        /// Collect ids of all neighbors of a node. Throw of this method is equivalent with returnning false.
+        /// </summary>
         private bool GetNeighbourhoodSnapshot(Node node, int layer, out int[] ids)
         {
             try
@@ -111,6 +111,9 @@ namespace HNSWIndex
             return res;
         }
 
+        /// <summary>
+        /// Check if neighborhood is free.
+        /// </summary>
         private bool AllFreeLock(IReadOnlyList<int> ids)
         {
             for (int i = 0; i < ids.Count; i++)
@@ -121,11 +124,17 @@ namespace HNSWIndex
             return true;
         }
 
+        /// <summary>
+        /// Mark neighborhood as busy
+        /// </summary>
         private void MarkLock(IReadOnlyList<int> ids)
         {
             for (int i = 0; i < ids.Count; i++) busy[ids[i]] = true;
         }
 
+        /// <summary>
+        /// Mark neighborhood as free
+        /// </summary>
         private void UnmarkLock(IReadOnlyList<int> ids)
         {
             for (int i = 0; i < ids.Count; i++) busy[ids[i]] = false;
