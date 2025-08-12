@@ -23,9 +23,8 @@ namespace HNSWIndex
 
         internal Queue<int> RemovedIndexes { get; private set; }
 
-        internal object NeighbourhoodBitmapLock = new object();
 
-        internal List<bool> NeighbourhoodBitmap { get; private set; }
+        internal GraphRegionLocker GraphLocker;
 
         internal object entryPointLock = new object();
 
@@ -63,8 +62,8 @@ namespace HNSWIndex
 
             RemovedIndexes = new Queue<int>();
             Nodes = new Node[parameters.CollectionSize];
-            NeighbourhoodBitmap = new List<bool>(parameters.CollectionSize);
             Items = new TLabel[parameters.CollectionSize];
+            GraphLocker = new GraphRegionLocker(parameters.CollectionSize);
         }
 
         /// <summary>
@@ -80,14 +79,11 @@ namespace HNSWIndex
 
             Nodes = snapshot.ParsedNodes ?? new Node[parameters.CollectionSize];
             Items = snapshot.ParsedItems ?? new TLabel[parameters.CollectionSize];
+            GraphLocker = new GraphRegionLocker(snapshot.Capacity);
             RemovedIndexes = snapshot.RemovedIndexes ?? new Queue<int>();
             EntryPointId = snapshot.EntryPointId;
             Capacity = snapshot.Capacity;
             Length = snapshot.Length;
-
-            NeighbourhoodBitmap = new List<bool>(Capacity);
-            for (int i = 0; i < Nodes.Length; i++)
-                NeighbourhoodBitmap.Add(false);
         }
 
         /// <summary>
@@ -119,7 +115,6 @@ namespace HNSWIndex
             vacantId = Length++;
             Nodes[vacantId] = NewNode(vacantId, topLayer);
             Items[vacantId] = item;
-            NeighbourhoodBitmap.Add(false);
             if (Length >= Capacity)
             {
                 Capacity *= 2;
@@ -129,7 +124,9 @@ namespace HNSWIndex
                 Array.Resize(ref items, Capacity);
                 Nodes = nodes;
                 Items = items;
+                // Update other structures
                 Reallocated?.Invoke(this, new ReallocateEventArgs(Capacity));
+                GraphLocker.UpdateCapacity(Capacity);
             }
             return vacantId;
         }
@@ -160,7 +157,8 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Try to move the role of entry point to neighbor at given layer
+        /// Try to move the role of entry point to neighbor at given layer.
+        /// This operations should be performed under neighborhhod lock of EP.
         /// </summary>
         internal bool TryReplaceEntryPoint(int layer)
         {
@@ -216,73 +214,6 @@ namespace HNSWIndex
                 OutEdges = outEdges,
                 InEdges = inEdges,
             };
-        }
-
-        /// <summary>
-        /// Wait until all neighbours of the node at given layer are free
-        /// Then lock all those neighbours until processing is done
-        /// </summary>
-        internal void LockNodeNeighbourhood(Node node, int layer)
-        {
-            lock (NeighbourhoodBitmapLock)
-            {
-                while (NeighbourhoodIsBusy(node, layer))
-                {
-                    Monitor.Wait(NeighbourhoodBitmapLock);
-                }
-
-                NeighbourhoodBitmap[node.Id] = true;
-                foreach (var neighbourId in node.OutEdges[layer])
-                    NeighbourhoodBitmap[neighbourId] = true;
-                foreach (var neighbourId in node.InEdges[layer])
-                    NeighbourhoodBitmap[neighbourId] = true;
-            }
-        }
-
-        /// <summary>
-        /// Free all nodes locked with LockNodeNeighbourhood method
-        /// </summary>
-        internal void UnlockNodeNeighbourhood(Node node, int layer)
-        {
-            lock (NeighbourhoodBitmapLock)
-            {
-                NeighbourhoodBitmap[node.Id] = false;
-                foreach (var neighbourId in node.OutEdges[layer])
-                    NeighbourhoodBitmap[neighbourId] = false;
-                foreach (var neighbourId in node.InEdges[layer])
-                    NeighbourhoodBitmap[neighbourId] = false;
-                Monitor.PulseAll(NeighbourhoodBitmapLock);
-            }
-        }
-
-        /// <summary>
-        /// Check if the node and its neighbours are busy at given layer.
-        /// This method is used to acquire lock for region of the graph associated with the node.
-        /// </summary>
-        internal bool NeighbourhoodIsBusy(Node node, int layer)
-        {
-            bool result = NeighbourhoodBitmap[node.Id];
-
-            try
-            {
-                foreach (var neighbourId in node.OutEdges[layer])
-                {
-                    result |= NeighbourhoodBitmap[neighbourId];
-                }
-                foreach (var neighbourId in node.InEdges[layer])
-                {
-                    result |= NeighbourhoodBitmap[neighbourId];
-                }
-            }
-            catch (InvalidOperationException)
-            {
-                return false;
-            }
-            catch (Exception)
-            {
-                throw;
-            }
-            return result;
         }
 
         /// <summary>
