@@ -42,7 +42,7 @@ namespace HNSWIndex
             }
         }
 
-        internal void RemoveNodeConnections(Node item, bool removeLabel = true)
+        internal void RemoveNodeConnections(Node item)
         {
             // TODO: Think about different method for handling side effects which have to be done under neighborhood lock.
             for (int layer = item.MaxLayer; layer >= 0; layer--)
@@ -61,7 +61,7 @@ namespace HNSWIndex
                         }
                     }
                     RemoveConnectionsAtLayer(item, layer);
-                    if (layer == 0 && removeLabel) data.RemoveItem(item.Id); // Remove label before leaving locks
+                    if (layer == 0) data.RemoveItem(item.Id); // Remove label before leaving locks
                 }
             }
         }
