@@ -298,5 +298,51 @@
                 Assert.IsTrue(layer.AvgOutEdges == layer.AvgInEdges);
             }
         }
+
+        [TestMethod]
+        public void UpdateNodesTest()
+        {
+            Assert.IsNotNull(vectors);
+
+            var dim = vectors[0].Length;
+            var newVectors = Utils.RandomVectors(dim, vectors.Count);
+            var indexes = new List<int>(vectors.Count);
+            var index = new HNSWIndex<float[], float>(Metrics.SquaredEuclideanMetric.Compute);
+            for (int i = 0; i < vectors.Count; i++)
+            {
+                Utils.Normalize(vectors[i]);
+                indexes.Add(index.Add(vectors[i]));
+            }
+
+            var goodFinds = 0;
+            for (int i = 0; i < vectors.Count; i++)
+            {
+                var result = index.KnnQuery(vectors[i], 1);
+                var bestFound = result[0].Label;
+                if (vectors[i] == bestFound)
+                    goodFinds++;
+                // change vectors a bit
+                for (int d = 0; d < dim; d++)
+                    newVectors[i][d] += vectors[i][d];
+                Utils.Normalize(vectors[i]);
+            }
+
+            var recall = (float)goodFinds / vectors.Count;
+
+            index.Update(indexes, newVectors);
+
+            goodFinds = 0;
+            for (int i = 0; i < vectors.Count; i++)
+            {
+                var result = index.KnnQuery(newVectors[i], 1);
+                var bestFound = result[0].Label;
+                if (newVectors[i] == bestFound)
+                    goodFinds++;
+            }
+            var updateRecall = (float)goodFinds / vectors.Count;
+
+            Console.WriteLine($"Insert recall: {recall} | Update recall: {updateRecall}");
+            Assert.IsTrue(recall < updateRecall + 0.01 * recall);
+        }
     }
 }
