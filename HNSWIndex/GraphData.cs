@@ -86,6 +86,7 @@ namespace HNSWIndex
             EntryPointId = snapshot.EntryPointId;
             Capacity = snapshot.Capacity;
             Length = snapshot.Length;
+            Count = snapshot.Count;
         }
 
         /// <summary>

@@ -6,6 +6,7 @@ namespace HNSWIndex
     internal class GraphNavigator<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance> where TLabel : IList
     {
         private static Func<int, bool> noFilter = _ => true;
+        private static Func<int, int, bool> noLayerFilter = (_, _) => true;
 
         private VisitedListPool pool;
         private GraphData<TLabel, TDistance> data;
@@ -20,10 +21,17 @@ namespace HNSWIndex
             closerFirst = new ReverseDistanceComparer<TDistance>();
         }
 
-        internal Node FindEntryPoint<T>(int dstLayer, DistanceCalculator<T, TDistance> dstDistance, bool locking = true)
+        /// <summary>
+        /// Find entry point for qury search at specified layer.
+        /// Default locking is in writer mode and can be changed.
+        /// Optional filter function can discriminate specific candidates. 
+        /// </summary>
+        internal Node FindEntryPoint(int dstLayer, TLabel query, bool locking = true, Func<int, int, bool>? filterFnc = null)
         {
+            filterFnc ??= noLayerFilter;
+
             var bestPeer = data.EntryPoint;
-            var currDist = dstDistance.From(bestPeer.Id);
+            var currDist = data.Distance(bestPeer.Id, query);
 
             for (int level = bestPeer.MaxLayer; level > dstLayer; level--)
             {
@@ -31,19 +39,22 @@ namespace HNSWIndex
                 while (changed)
                 {
                     changed = false;
-                    using var _ = new OptionalLock(locking, data.Nodes[bestPeer.Id].OutEdgesLock);
-                    List<int> connections = bestPeer.OutEdges[level];
-                    int size = connections.Count;
-
-                    for (int i = 0; i < size; i++)
+                    using (new OptionalLock(locking, data.Nodes[bestPeer.Id].OutEdgesLock))
                     {
-                        int cand = connections[i];
-                        var d = dstDistance.From(cand);
-                        if (d < currDist)
+                        List<int> connections = bestPeer.OutEdges[level];
+                        int size = connections.Count;
+
+                        for (int i = 0; i < size; i++)
                         {
-                            currDist = d;
-                            bestPeer = data.Nodes[cand];
-                            changed = true;
+                            int candidateId = connections[i];
+                            if (!filterFnc(candidateId, level)) continue;
+                            var d = data.Distance(candidateId, query);
+                            if (d < currDist)
+                            {
+                                currDist = d;
+                                bestPeer = data.Nodes[candidateId];
+                                changed = true;
+                            }
                         }
                     }
                 }
@@ -52,41 +63,52 @@ namespace HNSWIndex
             return bestPeer;
         }
 
-        internal Node FindEntryAtLayer<T>(int layer, Node startNode, DistanceCalculator<T, TDistance> dstDistance, bool locking = true)
+        // TODO: Joint this function with FindEntryPoint
+        internal Node FindEntryAtLayer(int layer, Node startNode, TLabel query, bool locking = true, Func<int, int, bool>? filterFnc = null)
         {
+            filterFnc ??= noLayerFilter;
+
             // TODO: Check if this logic can be extracted to regular FindEndtryPoint
             var bestPeer = startNode;
-            var currDist = dstDistance.From(bestPeer.Id);
+            var currDist = data.Distance(bestPeer.Id, query);
             bool changed = true;
             while (changed)
             {
                 changed = false;
-                using var _ = new OptionalLock(locking, data.Nodes[bestPeer.Id].OutEdgesLock);
-                List<int> connections = bestPeer.OutEdges[layer];
-                int size = connections.Count;
-
-                for (int i = 0; i < size; i++)
+                using (new OptionalLock(locking, data.Nodes[bestPeer.Id].OutEdgesLock))
                 {
-                    int cand = connections[i];
-                    var d = dstDistance.From(cand);
-                    if (d < currDist)
+                    List<int> connections = bestPeer.OutEdges[layer];
+                    int size = connections.Count;
+
+                    for (int i = 0; i < size; i++)
                     {
-                        currDist = d;
-                        bestPeer = data.Nodes[cand];
-                        changed = true;
+                        int candidateId = connections[i];
+                        if (!filterFnc(candidateId, layer)) continue;
+                        var d = data.Distance(candidateId, query);
+                        if (d < currDist)
+                        {
+                            currDist = d;
+                            bestPeer = data.Nodes[candidateId];
+                            changed = true;
+                        }
                     }
                 }
             }
             return bestPeer;
         }
 
-        internal List<NodeDistance<TDistance>> SearchLayer<T>(int entryPointId, int layer, int k, DistanceCalculator<T, TDistance> distanceCalculator, Func<int, bool>? filterFnc = null, bool locking = true)
+        /// <summary>
+        /// Perform search for k closest neighbors to queryPoint at given layer.
+        /// Search starts at entry point. Some points may be excluded from search with filter funcion.
+        /// Default lock in this method is in writer mode.
+        /// </summary>
+        internal List<NodeDistance<TDistance>> SearchLayer(int entryPointId, int layer, int k, TLabel queryPoint, Func<int, bool>? filterFnc = null, bool locking = true)
         {
             filterFnc ??= noFilter;
             var topCandidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k), fartherFirst);
             var candidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k * 2), closerFirst); // Guess that k*2 space is usually enough
 
-            var entry = new NodeDistance<TDistance> { Dist = distanceCalculator.From(entryPointId), Id = entryPointId };
+            var entry = new NodeDistance<TDistance> { Dist = data.Distance(entryPointId, queryPoint), Id = entryPointId };
             // TODO: Make it max value of TDistance
             var farthestResultDist = entry.Dist;
 
@@ -112,34 +134,36 @@ namespace HNSWIndex
                 candidates.Pop(); // Delay heap reordering in case of early break 
 
                 // take lock if needed and expand candidate
-                using var _ = new OptionalLock(locking, data.Nodes[closestCandidate.Id].OutEdgesLock);
-                var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer];
-
-                for (int i = 0; i < neighboursIds.Count; ++i)
+                using (new OptionalLock(locking, data.Nodes[closestCandidate.Id].OutEdgesLock))
                 {
-                    int neighbourId = neighboursIds[i];
-                    if (visitedList.Contains(neighbourId)) continue;
+                    var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer];
 
-                    var neighbourDistance = distanceCalculator.From(neighbourId);
-
-                    // enqueue perspective neighbours to expansion list
-                    if (topCandidates.Count < k || neighbourDistance < farthestResultDist)
+                    for (int i = 0; i < neighboursIds.Count; ++i)
                     {
-                        var selectedCandidate = new NodeDistance<TDistance> { Dist = neighbourDistance, Id = neighbourId };
-                        candidates.Push(selectedCandidate);
+                        int neighbourId = neighboursIds[i];
+                        if (visitedList.Contains(neighbourId)) continue;
 
-                        if (filterFnc(selectedCandidate.Id))
-                            topCandidates.Push(selectedCandidate);
+                        var neighbourDistance = data.Distance(neighbourId, queryPoint);
 
-                        if (topCandidates.Count > k)
-                            topCandidates.Pop();
+                        // enqueue perspective neighbours to expansion list
+                        if (topCandidates.Count < k || neighbourDistance < farthestResultDist)
+                        {
+                            var selectedCandidate = new NodeDistance<TDistance> { Dist = neighbourDistance, Id = neighbourId };
+                            candidates.Push(selectedCandidate);
 
-                        if (topCandidates.Count > 0)
-                            farthestResultDist = topCandidates.Buffer[0].Dist;
+                            if (filterFnc(selectedCandidate.Id))
+                                topCandidates.Push(selectedCandidate);
+
+                            if (topCandidates.Count > k)
+                                topCandidates.Pop();
+
+                            if (topCandidates.Count > 0)
+                                farthestResultDist = topCandidates.Buffer[0].Dist;
+                        }
+
+                        // update visited list
+                        visitedList.Add(neighbourId);
                     }
-
-                    // update visited list
-                    visitedList.Add(neighbourId);
                 }
             }
 

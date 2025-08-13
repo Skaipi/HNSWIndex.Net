@@ -92,13 +92,7 @@ namespace HNSWIndex
         public void Remove(int itemIndex)
         {
             var item = data.Nodes[itemIndex];
-            for (int layer = item.MaxLayer; layer >= 0; layer--)
-            {
-                data.LockNodeNeighbourhood(item, layer);
-                connector.RemoveConnectionsAtLayer(item, layer);
-                if (layer == 0) data.RemoveItem(itemIndex);
-                data.UnlockNodeNeighbourhood(item, layer);
-            }
+            connector.RemoveNodeConnections(item);
         }
 
         /// <summary>
@@ -119,29 +113,77 @@ namespace HNSWIndex
         {
             if (indexes.Count != labels.Count) throw new ArgumentException("Update collections size mismatch");
 
-            // Remove connections without removing data
+            var maxLayerToFix = new int[indexes.Count]; // Top layer where update occured
+            Array.Fill(maxLayerToFix, -1);
+
+            // Decide which layers to rewire and temporarily disconnect at those layers
             Parallel.For(0, indexes.Count, (i) =>
             {
-                var item = data.Nodes[indexes[i]];
-                for (int layer = item.MaxLayer; layer >= 0; layer--)
+                var index = indexes[i];
+                var newLabel = labels[i];
+                var oldLabel = data.Items[index];
+                var difference = data.Distance(newLabel, oldLabel);
+                var node = data.Nodes[index];
+
+                var firstNonEmptyLayerr = -1;
+                for (int layer = maxLayerToFix[i]; layer >= 0; layer--)
                 {
-                    data.LockNodeNeighbourhood(item, layer);
-                    connector.RemoveConnectionsAtLayer(item, layer);
-                    data.UnlockNodeNeighbourhood(item, layer);
+                    // Update on significant difference 
+                    using (data.GraphLocker.LockNodeNeighbourhood(node, layer))
+                    {
+                        var outs = node.OutEdges[layer];
+                        if (outs.Count == 0) continue; // Most likely single point at layer
+                        if (firstNonEmptyLayerr == -1) firstNonEmptyLayerr = layer;
+
+                        var minEdge = node.OutEdges[layer].Min(n => data.Distance(index, n));
+                        if (maxLayerToFix[i] == -1 && minEdge <= difference)
+                        {
+                            maxLayerToFix[i] = layer;
+                            break;
+                        }
+
+                        // Move ep if change would invalid its status
+                        if (index == data.EntryPointId && maxLayerToFix[i] == firstNonEmptyLayerr)
+                        {
+                            var replacementFound = data.TryReplaceEntryPoint(layer);
+                            if (!replacementFound && layer == 0)
+                            {
+                                throw new InvalidOperationException("HNSW Update Exception: operation invalidated EP");
+                            }
+                        }
+                        connector.RemoveConnectionsAtLayer(node, layer);
+                        connector.ResetNodeConnectionsAtLayer(node, layer);
+                    }
                 }
+                // swap the label
+                data.Items[index] = newLabel;
             });
+
+            var updatesMap = new Dictionary<int, int>(indexes.Count);
+            for (int i = 0; i < indexes.Count; i++)
+                if (maxLayerToFix[i] >= 0) updatesMap.Add(indexes[i], maxLayerToFix[i]);
 
             // Insert node with new label with the same index
             Parallel.For(0, indexes.Count, (i) =>
             {
-                var index = indexes[i];
-                var label = labels[i];
-                var id = data.UpdateItem(index, label);
-                if (id == -1) return;
+                var updateLayer = maxLayerToFix[i];
+                if (updateLayer < 0) return;
 
-                lock (data.Nodes[index].OutEdgesLock)
+                var index = indexes[i];
+                var node = data.Nodes[index];
+                Func<int, int, bool> epFilter = (candidate, layer) => candidate != index && updatesMap.GetValueOrDefault(candidate, -1) < layer - 1;
+
+                // Perform reconnect
+                lock (node.OutEdgesLock)
                 {
-                    connector.ConnectNewNode(index);
+                    var bestPeer = navigator.FindEntryPoint(updateLayer, data.Items[index], true, epFilter);
+                    for (int layer = updateLayer; layer >= 0; layer--)
+                    {
+                        // this node has no connectinos at this layer.
+                        Func<int, bool> searchFilter = (candidate) => candidate != index && updatesMap.GetValueOrDefault(candidate, -1) < layer; // Do not allow points under rebuild
+                        if (layer < data.GetTopLayer()) bestPeer = navigator.FindEntryAtLayer(layer + 1, bestPeer, data.Items[index], true, epFilter);
+                        connector.ConnectAtLayer(node, bestPeer, layer, searchFilter);
+                    }
                 }
             });
         }
@@ -169,22 +211,15 @@ namespace HNSWIndex
         /// </summary>
         public List<KNNResult<TLabel, TDistance>> KnnQuery(TLabel query, int k, Func<TLabel, bool>? filterFnc = null, int layer = 0)
         {
-            if (data.Nodes.Length - data.RemovedIndexes.Count <= 0) return new List<KNNResult<TLabel, TDistance>>();
+            if (data.Count <= 0 || k < 1) return new List<KNNResult<TLabel, TDistance>>();
 
             Func<int, bool> indexFilter = _ => true;
             if (filterFnc is not null)
                 indexFilter = (index) => filterFnc(data.Items[index]);
 
-
-            TDistance queryDistance(int nodeId, TLabel label)
-            {
-                return distanceFnc(data.Items[nodeId], label);
-            }
-
             var neighboursAmount = Math.Max(parameters.MinNN, k);
-            var distCalculator = new DistanceCalculator<TLabel, TDistance>(queryDistance, query);
-            var ep = navigator.FindEntryPoint(layer, distCalculator, false);
-            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighboursAmount, distCalculator, indexFilter, false);
+            var ep = navigator.FindEntryPoint(layer, query, false);
+            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighboursAmount, query, indexFilter, false);
 
             if (k < neighboursAmount)
             {
@@ -199,20 +234,14 @@ namespace HNSWIndex
         public List<KNNResult<TLabel, TDistance>>[] MultiLayerKnnQuery(TLabel query, int k, int maxLayer = int.MaxValue, int minLayer = 0)
         {
             // TODO: Add checks for invalid max and min layer
-            if (data.Nodes.Length - data.RemovedIndexes.Count <= 0 || k < 1) return [];
+            if (data.Count <= 0 || k < 1) return [];
 
-            TDistance queryDistance(int nodeId, TLabel label)
-            {
-                return distanceFnc(data.Items[nodeId], label);
-            }
-
-            var distCalculator = new DistanceCalculator<TLabel, TDistance>(queryDistance, query);
-            var ep = data.EntryPoint.MaxLayer >= maxLayer ? navigator.FindEntryPoint(maxLayer, distCalculator, false) : data.EntryPoint;
+            var ep = data.EntryPoint.MaxLayer >= maxLayer ? navigator.FindEntryPoint(maxLayer, query, false) : data.EntryPoint;
             var result = new List<KNNResult<TLabel, TDistance>>[Math.Min(ep.MaxLayer, maxLayer) + 1];
             for (int layer = Math.Min(ep.MaxLayer, maxLayer); layer >= minLayer; layer--)
             {
-                ep = navigator.FindEntryAtLayer(layer, ep, distCalculator, false);
-                var candidates = navigator.SearchLayer(ep.Id, layer, k, distCalculator, (index) => index != ep.Id, false); // Search closest neighbors except entry point
+                ep = navigator.FindEntryAtLayer(layer, ep, query, false);
+                var candidates = navigator.SearchLayer(ep.Id, layer, k, query, (index) => index != ep.Id, false); // Search closest neighbors except entry point
                 result[layer] = candidates.ConvertAll(c => new KNNResult<TLabel, TDistance>(c.Id, data.Items[c.Id], c.Dist));
             }
             return result;

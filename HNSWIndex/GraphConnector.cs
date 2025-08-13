@@ -5,6 +5,7 @@ namespace HNSWIndex
 {
     internal class GraphConnector<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance> where TLabel : IList
     {
+        private static Func<int, bool> noFilter = _ => true;
         private GraphData<TLabel, TDistance> data;
         private GraphNavigator<TLabel, TDistance> navigator;
         private HNSWParameters<TDistance> parameters;
@@ -41,18 +42,32 @@ namespace HNSWIndex
             }
         }
 
-        internal void RemoveConnectionsAtLayer(Node removedNode, int layer)
+        internal void RemoveNodeConnections(Node item, bool removeLabel = true)
         {
-            if (removedNode.Id == data.EntryPointId)
+            // TODO: Think about different method for handling side effects which have to be done under neighborhood lock.
+            for (int layer = item.MaxLayer; layer >= 0; layer--)
             {
-                var replacementFound = data.TryReplaceEntryPoint(layer);
-                if (!replacementFound && layer == 0)
+                using (data.GraphLocker.LockNodeNeighbourhood(item, layer))
                 {
-                    if (data.Nodes.Length > 0) throw new InvalidOperationException("Delete on isolated enry point");
-                    data.EntryPointId = -1;
+                    // Handle EP removal
+                    if (item.Id == data.EntryPointId)
+                    {
+                        var replacementFound = data.TryReplaceEntryPoint(layer);
+                        if (!replacementFound && layer == 0)
+                        {
+                            // Take current removal into account
+                            if (data.Count > 1) throw new InvalidOperationException("Delete on isolated enry point");
+                            data.EntryPointId = -1;
+                        }
+                    }
+                    RemoveConnectionsAtLayer(item, layer);
+                    if (layer == 0 && removeLabel) data.RemoveItem(item.Id); // Remove label before leaving locks
                 }
             }
+        }
 
+        internal void RemoveConnectionsAtLayer(Node removedNode, int layer)
+        {
             WipeRelationsWithNode(removedNode, layer);
 
             var candidates = removedNode.OutEdges[layer];
@@ -89,29 +104,45 @@ namespace HNSWIndex
 
         private void RemoveOutEdge(Node target, Node badNeighbour, int layer)
         {
-            // Locks should be acquired beforehand. 
             target.OutEdges[layer].Remove(badNeighbour.Id);
         }
 
+        /// <summary>
+        /// Establish connections to node.
+        /// </summary>
         private void AddNewConnections(Node currNode)
         {
-            var distCalculator = new DistanceCalculator<int, TDistance>(data.Distance, currNode.Id);
-            var bestPeer = navigator.FindEntryPoint(currNode.MaxLayer, distCalculator);
+            var bestPeer = navigator.FindEntryPoint(currNode.MaxLayer, data.Items[currNode.Id]);
 
             for (int layer = Math.Min(currNode.MaxLayer, data.GetTopLayer()); layer >= 0; --layer)
             {
-                var topCandidates = navigator.SearchLayer(bestPeer.Id, layer, parameters.MaxCandidates, distCalculator);
-                var bestNeighboursIds = parameters.Heuristic(topCandidates, data.Distance, data.MaxEdges(layer));
-
-                for (int i = 0; i < bestNeighboursIds.Count; ++i)
-                {
-                    int newNeighbourId = bestNeighboursIds[i];
-                    Connect(currNode, data.Nodes[newNeighbourId], layer);
-                    Connect(data.Nodes[newNeighbourId], currNode, layer);
-                }
+                int bestPeerId = ConnectAtLayer(currNode, bestPeer, layer);
+                bestPeer = bestPeerId < 0 ? data.EntryPoint : data.Nodes[bestPeerId];
             }
         }
 
+        /// <summary>
+        /// Establish connections to node at given layer and return best peer.
+        /// </summary>
+        internal int ConnectAtLayer(Node currNode, Node bestPeer, int layer, Func<int, bool>? filterFnc = null)
+        {
+            filterFnc ??= noFilter;
+            var topCandidates = navigator.SearchLayer(bestPeer.Id, layer, parameters.MaxCandidates, data.Items[currNode.Id], filterFnc);
+            var bestNeighboursIds = parameters.Heuristic(topCandidates, data.Distance, data.MaxEdges(layer));
+
+            for (int i = 0; i < bestNeighboursIds.Count; ++i)
+            {
+                int newNeighbourId = bestNeighboursIds[i];
+                Connect(currNode, data.Nodes[newNeighbourId], layer);
+                Connect(data.Nodes[newNeighbourId], currNode, layer);
+            }
+
+            return topCandidates.Count == 0 ? -1 : topCandidates[0].Id;
+        }
+
+        /// <summary>
+        /// Connect two nodes and handle overflow of edges.
+        /// </summary>
         private void Connect(Node node, Node neighbour, int layer)
         {
             lock (node.OutEdgesLock)
@@ -132,6 +163,9 @@ namespace HNSWIndex
             }
         }
 
+        /// <summary>
+        /// Handle overflow of neighbors using heuristic function.
+        /// </summary>
         private void RecomputeConnections(Node node, List<int> candidates, int layer)
         {
             var candidatesDistances = new List<NodeDistance<TDistance>>(candidates.Count);
@@ -139,6 +173,20 @@ namespace HNSWIndex
                 candidatesDistances.Add(new NodeDistance<TDistance> { Dist = data.Distance(neighbourId, node.Id), Id = neighbourId });
             var newNeighbours = parameters.Heuristic(candidatesDistances, data.Distance, data.MaxEdges(layer));
             node.OutEdges[layer] = newNeighbours;
+        }
+
+        internal void ResetNodeConnections(Node node)
+        {
+            for (int layer = node.MaxLayer; layer >= 0; layer--)
+            {
+                ResetNodeConnectionsAtLayer(node, layer);
+            }
+        }
+
+        internal void ResetNodeConnectionsAtLayer(Node node, int layer)
+        {
+            node.OutEdges[layer] = new List<int>(data.MaxEdges(layer) + 1);
+            node.InEdges[layer] = new List<int>(data.MaxEdges(layer) + 1);
         }
 
         private void WipeRelationsWithNode(Node node, int layer)

@@ -30,6 +30,9 @@ namespace HNSWIndex
         [ProtoMember(6)]
         internal int Length;
 
+        [ProtoMember(7)]
+        internal int Count;
+
         internal TLabel[]? ParsedItems
         {
             get
@@ -60,6 +63,7 @@ namespace HNSWIndex
             EntryPointId = data.EntryPointId;
             Capacity = data.Capacity;
             Length = data.Length;
+            Count = data.Count;
         }
     }
 }
