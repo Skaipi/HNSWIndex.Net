@@ -23,6 +23,7 @@
         /// </summary>
         internal void Add(int nodeId)
         {
+            if ((uint)nodeId >= (uint)Nodes.Length) EnsureCapacity(nodeId + 1);
             Nodes[nodeId] = CurrVersion;
         }
 
@@ -31,6 +32,7 @@
         /// </summary>
         internal bool Contains(int nodeId)
         {
+            if ((uint)nodeId >= (uint)Nodes.Length) return false; // nothing marked yet
             return Nodes[nodeId] == CurrVersion;
         }
 
@@ -46,6 +48,17 @@
                 Array.Clear(Nodes, 0, Nodes.Length);
                 CurrVersion++;
             }
+        }
+
+        /// <summary>
+        /// Expand existing list. This happend when data expanded during search operation, hence, within one version.
+        /// </summary>
+        private void EnsureCapacity(int min)
+        {
+            if (Nodes.Length >= min) return;
+            int newLen = Nodes.Length == 0 ? min : Nodes.Length;
+            while (newLen < min) newLen <<= 1;
+            Array.Resize(ref Nodes, newLen);
         }
     }
 
@@ -81,16 +94,24 @@
         internal VisitedList GetFreeVisitedList()
         {
             VisitedList result;
+            int expectedSize;
+
             lock (poolLock)
             {
+                expectedSize = numElements;
                 if (pool.Count > 0)
                 {
                     result = pool.Pop();
                 }
                 else
                 {
-                    result = new VisitedList(numElements);
+                    result = new VisitedList(expectedSize);
                 }
+            }
+
+            if (result.Count < expectedSize)
+            {
+                result = new VisitedList(expectedSize);
             }
 
             result.Next();
@@ -102,10 +123,10 @@
         /// </summary>
         internal void ReleaseVisitedList(VisitedList visitedList)
         {
-            // Do not return list with old capacity
-            if (visitedList.Count == numElements)
+            lock (poolLock)
             {
-                lock (poolLock)
+                // Do not return list with old capacity
+                if (visitedList.Count == numElements)
                 {
                     pool.Push(visitedList);
                 }
@@ -117,10 +138,9 @@
         /// </summary>
         internal void Resize(int newCapacity)
         {
-            numElements = newCapacity;
-
             lock (poolLock)
             {
+                numElements = newCapacity;
                 var currCapacity = Math.Max(pool.Count, initialSize);
 
                 pool.Clear();

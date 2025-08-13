@@ -6,9 +6,6 @@ namespace HNSWIndex
 {
     public class HNSWIndex<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance> where TLabel : IList
     {
-        // Delegates are not serializable and should be set after deserialization
-        private Func<TLabel, TLabel, TDistance> distanceFnc;
-
         private readonly HNSWParameters<TDistance> parameters;
 
         private readonly GraphData<TLabel, TDistance> data;
@@ -23,7 +20,6 @@ namespace HNSWIndex
         public HNSWIndex(Func<TLabel, TLabel, TDistance> distFnc, HNSWParameters<TDistance>? hnswParameters = null)
         {
             hnswParameters ??= new HNSWParameters<TDistance>();
-            distanceFnc = distFnc;
             parameters = hnswParameters;
 
             data = new GraphData<TLabel, TDistance>(distFnc, hnswParameters);
@@ -44,7 +40,6 @@ namespace HNSWIndex
             if (snapshot.DataSnapshot is null)
                 throw new ArgumentNullException(nameof(snapshot.DataSnapshot), "Data cannot be null during deserialization.");
 
-            distanceFnc = distFnc;
             parameters = snapshot.Parameters;
             data = new GraphData<TLabel, TDistance>(snapshot.DataSnapshot, distFnc, snapshot.Parameters);
 
@@ -125,7 +120,7 @@ namespace HNSWIndex
                 var difference = data.Distance(newLabel, oldLabel);
                 var node = data.Nodes[index];
 
-                var firstNonEmptyLayerr = -1;
+                var firstNonEmptyLayer = -1;
                 for (int layer = maxLayerToFix[i]; layer >= 0; layer--)
                 {
                     // Update on significant difference 
@@ -133,7 +128,7 @@ namespace HNSWIndex
                     {
                         var outs = node.OutEdges[layer];
                         if (outs.Count == 0) continue; // Most likely single point at layer
-                        if (firstNonEmptyLayerr == -1) firstNonEmptyLayerr = layer;
+                        if (firstNonEmptyLayer == -1) firstNonEmptyLayer = layer;
 
                         var minEdge = node.OutEdges[layer].Min(n => data.Distance(index, n));
                         if (maxLayerToFix[i] == -1 && minEdge <= difference)
@@ -143,7 +138,7 @@ namespace HNSWIndex
                         }
 
                         // Move ep if change would invalid its status
-                        if (index == data.EntryPointId && maxLayerToFix[i] == firstNonEmptyLayerr)
+                        if (index == data.EntryPointId && maxLayerToFix[i] == firstNonEmptyLayer)
                         {
                             var replacementFound = data.TryReplaceEntryPoint(layer);
                             if (!replacementFound && layer == 0)
