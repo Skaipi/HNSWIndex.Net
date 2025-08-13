@@ -86,13 +86,13 @@ namespace HNSWIndex
                 var result = new int[1 + outs.Count + ins.Count];
                 int k = 0;
                 result[k++] = node.Id;
-                for (int i = 0; i < outs.Count; i++) result[k++] = outs[i];
-                for (int i = 0; i < ins.Count; i++) result[k++] = ins[i];
+                foreach (var o in outs) result[k++] = o;
+                foreach (var i in ins) result[k++] = i;
 
                 ids = result;
                 return true;
             }
-            catch (InvalidOperationException)
+            catch (Exception ex) when (ex is InvalidOperationException || ex is IndexOutOfRangeException)
             {
                 // Enumeration torn by concurrent adjacency edits elsewhere; just retry.
                 ids = Array.Empty<int>();
