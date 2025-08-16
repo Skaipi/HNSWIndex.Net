@@ -2,51 +2,28 @@ namespace HNSWIndex
 {
     /// <summary>
     /// Lock immediate neighbors of node in the graph.
-    /// Re-entrant per thread: a thread may acquire the same region multiple times.
     /// </summary>
     internal class GraphRegionLocker
     {
         private readonly object bitmapLock = new object();
-
-        // Per-node ownership and reentrancy count.
-        private readonly List<int> owner;
-        private readonly List<int> count;
+        private readonly List<bool> busy;
 
         public GraphRegionLocker(int initCapacity)
         {
-            owner = new List<int>(initCapacity);
-            count = new List<int>(initCapacity);
-            if (initCapacity > 0)
-            {
-                owner.AddRange(new int[initCapacity]);
-                count.AddRange(new int[initCapacity]);
-            }
+            busy = new List<bool>(initCapacity);
+            busy.AddRange(new bool[initCapacity]);
         }
 
         /// <summary>
-        /// Extend capacity of the internal arrays. Thread-safe.
+        /// Extend capacity of busy flags
         /// </summary>
         public void UpdateCapacity(int newCapacity)
         {
-            lock (bitmapLock)
-            {
-                if (newCapacity <= owner.Count) return;
-                int delta = newCapacity - owner.Count;
-                owner.AddRange(new int[delta]);
-                count.AddRange(new int[delta]);
-            }
-        }
-
-        public List<IDisposable> FullNodeNeighbourhoodLock(Node node)
-        {
-            var result = new List<IDisposable>(node.MaxLayer + 1);
-            for (int layer = node.MaxLayer; layer >= 0; layer--)
-                result.Add(LockNodeNeighbourhood(node, layer));
-            return result;
+            busy.AddRange(new bool[newCapacity - busy.Count]);
         }
 
         /// <summary>
-        /// Acquire regional lock around node at specific layer.
+        /// Acquire regional lock around node at specific layer
         /// </summary>
         public IDisposable LockNodeNeighbourhood(Node node, int layer)
         {
@@ -55,34 +32,31 @@ namespace HNSWIndex
                 // Get snapshot
                 if (!GetNeighbourhoodSnapshot(node, layer, out var s0)) continue;
 
-                int tid = Thread.CurrentThread.ManagedThreadId;
-
-                // Mark neighborhood as busy (or re-enter if already ours).
+                // Mark neighborhood as busy
+                // Adjacency of s0 cannot be modified after this
                 lock (bitmapLock)
                 {
-                    while (!AllFreeLock(s0, tid)) Monitor.Wait(bitmapLock);
-                    MarkLock(s0, tid);
+                    while (!AllFreeLock(s0)) Monitor.Wait(bitmapLock);
+                    MarkLock(s0);
                 }
 
-                // Validate neighborhood with a second snapshot.
+                // Take second version to validate neighborhood.
                 if (!GetNeighbourhoodSnapshot(node, layer, out var s1))
                 {
-                    Release(s0); // roll back
+                    Release(s0);
                     continue;
                 }
 
                 var extras = Except(s1, s0);
                 var removed = Except(s0, s1);
-
                 lock (bitmapLock)
                 {
-                    // Attempt to expand to extras.
-                    if (AllFreeLock(extras, tid))
+                    // Attempt to expand to extras
+                    if (AllFreeLock(extras))
                     {
-                        MarkLock(extras, tid);
-
+                        MarkLock(extras);
                         // Optionally shrink immediately to avoid blocking on nodes no longer in s1
-                        if (removed.Count != 0) UnmarkLock(removed, tid);
+                        if (removed.Count != 0) UnmarkLock(removed);
 
                         // We now hold exactly s1. Wake potential waiters if we shrank.
                         if (removed.Count != 0) Monitor.PulseAll(bitmapLock);
@@ -90,15 +64,15 @@ namespace HNSWIndex
                         return new Releaser(this, s1);
                     }
 
-                    // Cannot expand because some extra id is busy by another thread → roll back s0 and retry.
-                    UnmarkLock(s0, tid);
+                    // Cannot expand because some extra id is busy → roll back s0 and retry.
+                    UnmarkLock(s0);
                     Monitor.PulseAll(bitmapLock);
                 }
             }
         }
 
         /// <summary>
-        /// Collect ids of all neighbors of a node. Throw of this method is equivalent with returning false.
+        /// Collect ids of all neighbors of a node. Throw of this method is equivalent with returnning false.
         /// </summary>
         private bool GetNeighbourhoodSnapshot(Node node, int layer, out int[] ids)
         {
@@ -126,7 +100,7 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Returns elements of a that are not in b (no duplicates).
+        /// Returns elements that are not in b (no duplicates).
         /// </summary>
         private static List<int> Except(int[] a, int[] b)
         {
@@ -137,107 +111,67 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Check if neighborhood is free for the given thread (free or already owned by this thread).
+        /// Check if neighborhood is free.
         /// </summary>
-        private bool AllFreeLock(IReadOnlyList<int> ids, int tid)
+        private bool AllFreeLock(IReadOnlyList<int> ids)
         {
             for (int i = 0; i < ids.Count; i++)
             {
                 int id = ids[i];
-                int own = owner[id];
-                if (own != 0 && own != tid) return false;
+                if (busy[id]) return false;
             }
             return true;
         }
 
         /// <summary>
-        /// Mark neighborhood as owned by the given thread (re-entrant: increments per-node count if already owned).
-        /// bitmapLock must be held by the caller.
+        /// Mark neighborhood as busy
         /// </summary>
-        private void MarkLock(IReadOnlyList<int> ids, int tid)
+        private void MarkLock(IReadOnlyList<int> ids)
         {
-            for (int i = 0; i < ids.Count; i++)
-            {
-                int id = ids[i];
-                if (owner[id] == 0)
-                {
-                    owner[id] = tid;
-                    count[id] = 1;
-                }
-                else
-                {
-                    // Either re-entrance by same thread, or logic bug.
-                    if (owner[id] != tid)
-                        throw new InvalidOperationException("MarkLock: ownership conflict detected.");
-                    checked { count[id]++; }
-                }
-            }
+            for (int i = 0; i < ids.Count; i++) busy[ids[i]] = true;
         }
 
         /// <summary>
-        /// Unmark neighborhood for the current thread (decrements per-node count; frees on zero).
-        /// bitmapLock must be held by the caller.
+        /// Mark neighborhood as free
         /// </summary>
-        private void UnmarkLock(IReadOnlyList<int> ids, int tid)
+        private void UnmarkLock(IReadOnlyList<int> ids)
         {
-            for (int i = 0; i < ids.Count; i++)
-            {
-                int id = ids[i];
-                if (owner[id] == 0)
-                {
-                    continue;
-                }
-                if (owner[id] != tid)
-                {
-                    // Another thread owns it; this should not happen.
-                    throw new InvalidOperationException("UnmarkLock: attempted to release a region owned by a different thread.");
-                }
-
-                int c = count[id] - 1;
-                if (c <= 0)
-                {
-                    owner[id] = 0;
-                    count[id] = 0;
-                }
-                else
-                {
-                    count[id] = c;
-                }
-            }
+            for (int i = 0; i < ids.Count; i++) busy[ids[i]] = false;
         }
 
         private void Release(int[] ids)
         {
             lock (bitmapLock)
             {
-                UnmarkLock(ids, Thread.CurrentThread.ManagedThreadId);
+                UnmarkLock(ids);
                 Monitor.PulseAll(bitmapLock);
             }
         }
 
         private sealed class Releaser : IDisposable
         {
-            private GraphRegionLocker ownerRef;
+            private GraphRegionLocker owner;
             private int[] ids;
 
             public Releaser(GraphRegionLocker owner, int[] ids)
             {
-                this.ownerRef = owner;
+                this.owner = owner;
                 this.ids = ids;
             }
 
             public void Dispose()
             {
-                var ownerLocal = Interlocked.Exchange(ref this.ownerRef!, null);
-                if (ownerLocal == null) return; // already disposed
+                var owner = Interlocked.Exchange(ref this.owner!, null);
+                if (owner == null) return; // already disposed
 
-                lock (ownerLocal.bitmapLock)
+                lock (owner.bitmapLock)
                 {
-                    ownerLocal.UnmarkLock(ids, Thread.CurrentThread.ManagedThreadId);
-                    Monitor.PulseAll(ownerLocal.bitmapLock);
+                    // Clear bits and wake waiters
+                    owner.UnmarkLock(ids);
+                    Monitor.PulseAll(owner.bitmapLock);
                 }
 
-                // GC improvement
+                // GC improvement (hopefully)
                 ids = Array.Empty<int>();
             }
         }
