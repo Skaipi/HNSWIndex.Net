@@ -56,7 +56,6 @@ namespace HNSWIndex
                         if (!replacementFound && layer == 0)
                         {
                             // Take current removal into account
-                            if (data.Count > 1) throw new InvalidOperationException("Delete on isolated enry point");
                             data.EntryPointId = -1;
                         }
                     }
@@ -110,14 +109,14 @@ namespace HNSWIndex
         /// <summary>
         /// Establish connections to node.
         /// </summary>
-        private void AddNewConnections(Node currNode)
+        internal void AddNewConnections(Node currNode)
         {
             var bestPeer = navigator.FindEntryPoint(currNode.MaxLayer, data.Items[currNode.Id]);
 
             for (int layer = Math.Min(currNode.MaxLayer, data.GetTopLayer()); layer >= 0; --layer)
             {
-                int bestPeerId = ConnectAtLayer(currNode, bestPeer, layer);
-                bestPeer = bestPeerId < 0 ? data.EntryPoint : data.Nodes[bestPeerId];
+                int nextClosestEntryPointId = ConnectAtLayer(currNode, bestPeer, layer);
+                bestPeer = data.Nodes[nextClosestEntryPointId];
             }
         }
 
@@ -127,7 +126,9 @@ namespace HNSWIndex
         internal int ConnectAtLayer(Node currNode, Node bestPeer, int layer, Func<int, bool>? filterFnc = null)
         {
             filterFnc ??= noFilter;
-            var topCandidates = navigator.SearchLayer(bestPeer.Id, layer, parameters.MaxCandidates, data.Items[currNode.Id], filterFnc);
+
+            var topCandidates = navigator.SearchLayer(bestPeer.Id, layer, parameters.MaxCandidates, data.Items[currNode.Id], null, filterFnc);
+            if (topCandidates.Count == 0) return bestPeer.Id;
             var bestNeighboursIds = parameters.Heuristic(topCandidates, data.Distance, data.MaxEdges(layer));
 
             for (int i = 0; i < bestNeighboursIds.Count; ++i)
@@ -137,7 +138,7 @@ namespace HNSWIndex
                 Connect(data.Nodes[newNeighbourId], currNode, layer);
             }
 
-            return topCandidates.Count == 0 ? -1 : topCandidates[0].Id;
+            return bestNeighboursIds[0];
         }
 
         /// <summary>

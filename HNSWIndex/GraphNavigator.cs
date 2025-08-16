@@ -6,7 +6,7 @@ namespace HNSWIndex
     internal class GraphNavigator<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance> where TLabel : IList
     {
         private static Func<int, bool> noFilter = _ => true;
-        private static Func<int, int, bool> noLayerFilter = (_, _) => true;
+        private static Func<int, bool> noLayerFilter = (_) => true;
 
         private VisitedListPool pool;
         private GraphData<TLabel, TDistance> data;
@@ -26,7 +26,7 @@ namespace HNSWIndex
         /// Default locking is in writer mode and can be changed.
         /// Optional filter function can discriminate specific candidates. 
         /// </summary>
-        internal Node FindEntryPoint(int dstLayer, TLabel query, bool locking = true, Func<int, int, bool>? filterFnc = null)
+        internal Node FindEntryPoint(int dstLayer, TLabel query, bool locking = true, Func<int, bool>? filterFnc = null)
         {
             filterFnc ??= noLayerFilter;
 
@@ -47,7 +47,7 @@ namespace HNSWIndex
                         for (int i = 0; i < size; i++)
                         {
                             int candidateId = connections[i];
-                            if (!filterFnc(candidateId, level)) continue;
+                            if (!filterFnc(candidateId)) continue;
                             var d = data.Distance(candidateId, query);
                             if (d < currDist)
                             {
@@ -64,7 +64,7 @@ namespace HNSWIndex
         }
 
         // TODO: Joint this function with FindEntryPoint
-        internal Node FindEntryAtLayer(int layer, Node startNode, TLabel query, bool locking = true, Func<int, int, bool>? filterFnc = null)
+        internal Node FindEntryAtLayer(int layer, Node startNode, TLabel query, bool locking = true, Func<int, bool>? filterFnc = null)
         {
             filterFnc ??= noLayerFilter;
 
@@ -83,7 +83,7 @@ namespace HNSWIndex
                     for (int i = 0; i < size; i++)
                     {
                         int candidateId = connections[i];
-                        if (!filterFnc(candidateId, layer)) continue;
+                        if (!filterFnc(candidateId)) continue;
                         var d = data.Distance(candidateId, query);
                         if (d < currDist)
                         {
@@ -102,9 +102,10 @@ namespace HNSWIndex
         /// Search starts at entry point. Some points may be excluded from search with filter funcion.
         /// Default lock in this method is in writer mode.
         /// </summary>
-        internal List<NodeDistance<TDistance>> SearchLayer(int entryPointId, int layer, int k, TLabel queryPoint, Func<int, bool>? filterFnc = null, bool locking = true)
+        internal List<NodeDistance<TDistance>> SearchLayer(int entryPointId, int layer, int k, TLabel queryPoint, Func<int, bool>? filterFnc = null, Func<int, bool>? filterSearch = null, bool locking = true)
         {
             filterFnc ??= noFilter;
+            filterSearch ??= noFilter;
             var topCandidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k), fartherFirst);
             var candidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k * 2), closerFirst); // Guess that k*2 space is usually enough
 
@@ -141,7 +142,8 @@ namespace HNSWIndex
                     for (int i = 0; i < neighboursIds.Count; ++i)
                     {
                         int neighbourId = neighboursIds[i];
-                        if (visitedList.Contains(neighbourId)) continue;
+                        // if (visitedList.Contains(neighbourId)) continue;
+                        if (visitedList.Contains(neighbourId) || !filterSearch(neighbourId)) continue;
 
                         var neighbourDistance = data.Distance(neighbourId, queryPoint);
 

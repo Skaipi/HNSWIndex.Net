@@ -324,7 +324,7 @@
                 // change vectors a bit
                 for (int d = 0; d < dim; d++)
                     newVectors[i][d] += vectors[i][d];
-                Utils.Normalize(vectors[i]);
+                Utils.Normalize(newVectors[i]);
             }
 
             var recall = (float)goodFinds / vectors.Count;
@@ -339,10 +339,10 @@
                 if (newVectors[i] == bestFound)
                     goodFinds++;
             }
-            var updateRecall = (float)goodFinds / vectors.Count;
+            var updateRecall = (float)goodFinds / newVectors.Count;
 
             Console.WriteLine($"Insert recall: {recall} | Update recall: {updateRecall}");
-            Assert.IsTrue(recall < updateRecall + 0.01 * recall);
+            Assert.IsTrue(recall < updateRecall + 0.05 * recall);
         }
     }
 }

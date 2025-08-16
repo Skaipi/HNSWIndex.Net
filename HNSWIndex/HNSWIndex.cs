@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Collections.Concurrent;
 using System.Numerics;
 using ProtoBuf;
 
@@ -108,6 +109,7 @@ namespace HNSWIndex
         {
             if (indexes.Count != labels.Count) throw new ArgumentException("Update collections size mismatch");
 
+            var originalEpId = data.EntryPointId;
             var maxLayerToFix = new int[indexes.Count]; // Top layer where update occured
             Array.Fill(maxLayerToFix, -1);
 
@@ -121,7 +123,7 @@ namespace HNSWIndex
                 var node = data.Nodes[index];
 
                 var firstNonEmptyLayer = -1;
-                for (int layer = maxLayerToFix[i]; layer >= 0; layer--)
+                for (int layer = node.MaxLayer; layer >= 0; layer--)
                 {
                     // Update on significant difference 
                     using (data.GraphLocker.LockNodeNeighbourhood(node, layer))
@@ -130,20 +132,17 @@ namespace HNSWIndex
                         if (outs.Count == 0) continue; // Most likely single point at layer
                         if (firstNonEmptyLayer == -1) firstNonEmptyLayer = layer;
 
-                        var minEdge = node.OutEdges[layer].Min(n => data.Distance(index, n));
-                        if (maxLayerToFix[i] == -1 && minEdge <= difference)
-                        {
-                            maxLayerToFix[i] = layer;
-                            break;
-                        }
+                        var minEdge = outs.Min(neighbor => data.Distance(index, neighbor));
+                        if (difference < minEdge) continue; // Skip layer w/o significant change
+                        if (maxLayerToFix[i] == -1) maxLayerToFix[i] = layer;
 
                         // Move ep if change would invalid its status
                         if (index == data.EntryPointId && maxLayerToFix[i] == firstNonEmptyLayer)
                         {
                             var replacementFound = data.TryReplaceEntryPoint(layer);
-                            if (!replacementFound && layer == 0)
+                            if (!replacementFound)
                             {
-                                throw new InvalidOperationException("HNSW Update Exception: operation invalidated EP");
+                                data.EntryPointId = -1;
                             }
                         }
                         connector.RemoveConnectionsAtLayer(node, layer);
@@ -154,11 +153,46 @@ namespace HNSWIndex
                 data.Items[index] = newLabel;
             });
 
-            var updatesMap = new Dictionary<int, int>(indexes.Count);
+            var updateMap = new ConcurrentDictionary<int, int>(65536, indexes.Count);
             for (int i = 0; i < indexes.Count; i++)
-                if (maxLayerToFix[i] >= 0) updatesMap.Add(indexes[i], maxLayerToFix[i]);
+                if (maxLayerToFix[i] >= 0) updateMap[indexes[i]] = maxLayerToFix[i];
 
-            // Insert node with new label with the same index
+
+            // Resotore good ep
+            if (data.EntryPointId < 0)
+            {
+                data.EntryPointId = originalEpId;
+            }
+            if (updateMap.GetValueOrDefault(originalEpId, -1) >= 0)
+            {
+                // Fix if layer is not empty
+                var originalEp = data.Nodes[originalEpId];
+                var epMaxLayerToFix = updateMap[originalEpId];
+                Func<int, bool> epLayerFilter = cand => cand != originalEpId && updateMap.GetValueOrDefault(cand, -1) < epMaxLayerToFix;
+
+                var restorationEntry = navigator.FindEntryPoint(updateMap[originalEpId], data.Items[originalEpId], true, epLayerFilter);
+                for (int layer = Math.Min(updateMap[originalEpId], data.GetTopLayer()); layer >= 0; layer--)
+                {
+                    if (!epLayerFilter(restorationEntry.Id)) break;
+                    var nextEntryCandidate = -1;
+                    if (layer > 0)
+                    {
+                        epLayerFilter = cand => cand != originalEpId && updateMap.GetValueOrDefault(cand, -1) < layer - 1;
+                        nextEntryCandidate = connector.ConnectAtLayer(originalEp, restorationEntry, layer, epLayerFilter);
+                    }
+                    else
+                    {
+                        epLayerFilter = cand => cand != originalEpId && updateMap.GetValueOrDefault(cand, -1) < 0;
+                        nextEntryCandidate = connector.ConnectAtLayer(originalEp, restorationEntry, layer, epLayerFilter);
+                    }
+
+                    restorationEntry = data.Nodes[nextEntryCandidate];
+                }
+                data.EntryPointId = originalEpId;
+                updateMap[originalEpId] = -1;
+            }
+
+            // Insert node with new label with the same index. At this point we have fully restored ep that can be used to navigate graph.
             Parallel.For(0, indexes.Count, (i) =>
             {
                 var updateLayer = maxLayerToFix[i];
@@ -166,18 +200,30 @@ namespace HNSWIndex
 
                 var index = indexes[i];
                 var node = data.Nodes[index];
-                Func<int, int, bool> epFilter = (candidate, layer) => candidate != index && updatesMap.GetValueOrDefault(candidate, -1) < layer - 1;
+                if (index == data.EntryPointId) return;
 
                 // Perform reconnect
                 lock (node.OutEdgesLock)
                 {
-                    var bestPeer = navigator.FindEntryPoint(updateLayer, data.Items[index], true, epFilter);
+                    Func<int, bool> entryFilter = cand => cand != index && updateMap.GetValueOrDefault(cand, -1) < updateLayer;
+                    var bestPeer = navigator.FindEntryPoint(updateLayer, data.Items[index], true, entryFilter);
                     for (int layer = updateLayer; layer >= 0; layer--)
                     {
-                        // this node has no connectinos at this layer.
-                        Func<int, bool> searchFilter = (candidate) => candidate != index && updatesMap.GetValueOrDefault(candidate, -1) < layer; // Do not allow points under rebuild
-                        if (layer < data.GetTopLayer()) bestPeer = navigator.FindEntryAtLayer(layer + 1, bestPeer, data.Items[index], true, epFilter);
-                        connector.ConnectAtLayer(node, bestPeer, layer, searchFilter);
+                        if (!entryFilter(bestPeer.Id)) bestPeer = data.EntryPoint;
+                        var nextEntryCandidateId = -1;
+                        if (layer > 0)
+                        {
+                            entryFilter = cand => cand != index && updateMap.GetValueOrDefault(cand, -1) < layer - 1;
+                            nextEntryCandidateId = connector.ConnectAtLayer(node, bestPeer, layer, entryFilter);
+                        }
+                        else
+                        {
+                            entryFilter = cand => cand != index && updateMap.GetValueOrDefault(cand, -1) < 0;
+                            nextEntryCandidateId = connector.ConnectAtLayer(node, bestPeer, layer, entryFilter);
+                        }
+
+                        bestPeer = data.Nodes[nextEntryCandidateId];
+                        updateMap[index] -= 1;
                     }
                 }
             });
@@ -214,7 +260,7 @@ namespace HNSWIndex
 
             var neighboursAmount = Math.Max(parameters.MinNN, k);
             var ep = navigator.FindEntryPoint(layer, query, false);
-            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighboursAmount, query, indexFilter, false);
+            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighboursAmount, query, indexFilter, null, false);
 
             if (k < neighboursAmount)
             {
@@ -236,7 +282,7 @@ namespace HNSWIndex
             for (int layer = Math.Min(ep.MaxLayer, maxLayer); layer >= minLayer; layer--)
             {
                 ep = navigator.FindEntryAtLayer(layer, ep, query, false);
-                var candidates = navigator.SearchLayer(ep.Id, layer, k, query, (index) => index != ep.Id, false); // Search closest neighbors except entry point
+                var candidates = navigator.SearchLayer(ep.Id, layer, k, query, (index) => index != ep.Id, null, false); // Search closest neighbors except entry point
                 result[layer] = candidates.ConvertAll(c => new KNNResult<TLabel, TDistance>(c.Id, data.Items[c.Id], c.Dist));
             }
             return result;
