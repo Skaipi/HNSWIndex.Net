@@ -105,8 +105,7 @@ namespace HNSWIndex
         private static List<int> Except(int[] a, int[] b)
         {
             var res = new List<int>(a.Length);
-            var setB = new HashSet<int>(b);
-            for (int i = 0; i < a.Length; i++) if (!setB.Contains(a[i])) res.Add(a[i]);
+            for (int i = 0; i < a.Length; i++) if (!b.Contains(a[i])) res.Add(a[i]);
             return res;
         }
 

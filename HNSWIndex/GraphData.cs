@@ -9,7 +9,7 @@ namespace HNSWIndex
     /// All lock related members are ommitted from serialization 
     /// and should be initialized in deserialization constructor.
     /// </summary>
-    internal class GraphData<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance> where TLabel : IList
+    internal class GraphData<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance> where TLabel : IList
     {
         internal event EventHandler<ReallocateEventArgs>? Reallocated;
 

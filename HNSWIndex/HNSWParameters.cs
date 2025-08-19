@@ -4,7 +4,7 @@ using ProtoBuf;
 namespace HNSWIndex
 {
     [ProtoContract]
-    public class HNSWParameters<TDistance> where TDistance : struct, IFloatingPoint<TDistance>
+    public class HNSWParameters<TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         /// <summary>
         /// Number of outgoing edges from nodes. Number of edges on layer 0 might not obey this limit.
