@@ -123,20 +123,22 @@ namespace HNSWIndex
                 var difference = data.Distance(newLabel, oldLabel);
                 var node = data.Nodes[index];
 
-                for (int layer = node.MaxLayer; layer >= 0; layer--)
+                if (TDistance.IsZero(difference)) return;
+
+                for (int layer = 0; layer <= node.MaxLayer; layer++)
                 {
                     // Update on significant difference 
                     using (data.GraphLocker.LockNodeNeighbourhood(node, layer))
                     {
                         var outs = node.OutEdges[layer];
                         var isDirtyAlready = dirtyByIndex.ContainsKey(index);
-                        if (outs.Count == 0 && !isDirtyAlready) continue; // Most likely single point at layer
+                        if (outs.Count == 0) return; // Most likely single point at layer
 
                         // TODO: Replace linq call with manual min finding
                         var minEdge = outs.Count > 0 ? outs.Min(neighbor => data.Distance(index, neighbor)) : TDistance.MaxValue;
-                        if (difference < minEdge && !isDirtyAlready) continue; // Skip layer w/o significant change
+                        if (difference < minEdge) return; // Skip layer w/o significant change
 
-                        dirtyByIndex.TryAdd(index, layer);
+                        dirtyByIndex[index] = layer;
 
                         // Move ep if change would invalid its status
                         // TODO: Replace linq call with manual maxby finding
@@ -163,7 +165,7 @@ namespace HNSWIndex
                 dirtyByIndex[data.EntryPointId] = -1;
             }
 
-            // Insert node with new label with the same index. At this point we have fully restored ep that can be used to navigate graph.
+            // Reinsert dirty nodes
             Parallel.ForEach(dirtyByIndex, (kvp) =>
             {
                 var index = kvp.Key;
