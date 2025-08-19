@@ -28,67 +28,43 @@ namespace HNSWIndex
         /// </summary>
         internal Node FindEntryPoint(int dstLayer, TLabel query, bool locking = true, Func<int, bool>? filterFnc = null)
         {
-            filterFnc ??= noLayerFilter;
-
             var bestPeer = data.EntryPoint;
-            var currDist = data.Distance(bestPeer.Id, query);
-
             for (int level = bestPeer.MaxLayer; level > dstLayer; level--)
-            {
-                bool changed = true;
-                while (changed)
-                {
-                    changed = false;
-                    using (new OptionalLock(locking, data.Nodes[bestPeer.Id].OutEdgesLock))
-                    {
-                        List<int> connections = bestPeer.OutEdges[level];
-                        int size = connections.Count;
-
-                        for (int i = 0; i < size; i++)
-                        {
-                            int candidateId = connections[i];
-                            if (!filterFnc(candidateId)) continue;
-                            var d = data.Distance(candidateId, query);
-                            if (d < currDist)
-                            {
-                                currDist = d;
-                                bestPeer = data.Nodes[candidateId];
-                                changed = true;
-                            }
-                        }
-                    }
-                }
-            }
-
+                bestPeer = FindEntryAtLayer(level, bestPeer, query, locking, filterFnc);
             return bestPeer;
         }
 
-        // TODO: Joint this function with FindEntryPoint
+        /// <summary>
+        /// Search for best entry point at specific layer.
+        /// Filter funtion discriminates certain solution.
+        /// </summary>
         internal Node FindEntryAtLayer(int layer, Node startNode, TLabel query, bool locking = true, Func<int, bool>? filterFnc = null)
         {
             filterFnc ??= noLayerFilter;
 
-            // TODO: Check if this logic can be extracted to regular FindEndtryPoint
             var bestPeer = startNode;
-            var currDist = data.Distance(bestPeer.Id, query);
+            var bestPeerCandidate = bestPeer;
+            var currDist = data.Distance(bestPeerCandidate.Id, query);
+
             bool changed = true;
             while (changed)
             {
                 changed = false;
-                using (new OptionalLock(locking, data.Nodes[bestPeer.Id].OutEdgesLock))
+                var shouldLock = locking && filterFnc(bestPeerCandidate.Id); // Rejected by filter are read only
+                using (new OptionalLock(shouldLock, bestPeerCandidate.OutEdgesLock))
                 {
-                    List<int> connections = bestPeer.OutEdges[layer];
+                    List<int> connections = bestPeerCandidate.OutEdges[layer];
                     int size = connections.Count;
 
                     for (int i = 0; i < size; i++)
                     {
                         int candidateId = connections[i];
-                        if (!filterFnc(candidateId)) continue;
                         var d = data.Distance(candidateId, query);
                         if (d < currDist)
                         {
                             currDist = d;
-                            bestPeer = data.Nodes[candidateId];
+                            bestPeerCandidate = data.Nodes[candidateId];
+                            if (filterFnc(candidateId)) bestPeer = bestPeerCandidate;
                             changed = true;
                         }
                     }
@@ -102,10 +78,9 @@ namespace HNSWIndex
         /// Search starts at entry point. Some points may be excluded from search with filter funcion.
         /// Default lock in this method is in writer mode.
         /// </summary>
-        internal List<NodeDistance<TDistance>> SearchLayer(int entryPointId, int layer, int k, TLabel queryPoint, Func<int, bool>? filterFnc = null, Func<int, bool>? filterSearch = null, bool locking = true)
+        internal List<NodeDistance<TDistance>> SearchLayer(int entryPointId, int layer, int k, TLabel queryPoint, Func<int, bool>? filterFnc = null, bool locking = true)
         {
             filterFnc ??= noFilter;
-            filterSearch ??= noFilter;
             var topCandidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k), fartherFirst);
             var candidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k * 2), closerFirst); // Guess that k*2 space is usually enough
 
@@ -142,8 +117,7 @@ namespace HNSWIndex
                     for (int i = 0; i < neighboursIds.Count; ++i)
                     {
                         int neighbourId = neighboursIds[i];
-                        // if (visitedList.Contains(neighbourId)) continue;
-                        if (visitedList.Contains(neighbourId) || !filterSearch(neighbourId)) continue;
+                        if (visitedList.Contains(neighbourId)) continue;
 
                         var neighbourDistance = data.Distance(neighbourId, queryPoint);
 

@@ -122,13 +122,13 @@ namespace HNSWIndex
 
         /// <summary>
         /// Establish connections to node at given layer and return best peer.
+        /// Optionally, provide filter function to discriminate certain solutions from ep status.
         /// </summary>
         internal int ConnectAtLayer(Node currNode, Node bestPeer, int layer, Func<int, bool>? filterFnc = null)
         {
             filterFnc ??= noFilter;
 
-            var topCandidates = navigator.SearchLayer(bestPeer.Id, layer, parameters.MaxCandidates, data.Items[currNode.Id], null, filterFnc);
-            if (topCandidates.Count == 0) return bestPeer.Id;
+            var topCandidates = navigator.SearchLayer(bestPeer.Id, layer, parameters.MaxCandidates, data.Items[currNode.Id]);
             var bestNeighboursIds = parameters.Heuristic(topCandidates, data.Distance, data.MaxEdges(layer));
 
             for (int i = 0; i < bestNeighboursIds.Count; ++i)
@@ -138,7 +138,7 @@ namespace HNSWIndex
                 Connect(data.Nodes[newNeighbourId], currNode, layer);
             }
 
-            return bestNeighboursIds[0];
+            return bestNeighboursIds.Where(filterFnc).FirstOrDefault(-1);
         }
 
         /// <summary>

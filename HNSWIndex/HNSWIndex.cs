@@ -109,9 +109,10 @@ namespace HNSWIndex
         {
             if (indexes.Count != labels.Count) throw new ArgumentException("Update collections size mismatch");
 
-            var originalEpId = data.EntryPointId;
-            var maxLayerToFix = new int[indexes.Count]; // Top layer where update occured
-            Array.Fill(maxLayerToFix, -1);
+            // index -> highest layer that needs reinsertion, -1 means clean
+            var dirtyByIndex = new ConcurrentDictionary<int, int>(Environment.ProcessorCount * 2, indexes.Count);
+            var cleanAnchors = new int[data.GetTopLayer() + 1];
+            Array.Fill(cleanAnchors, data.EntryPointId);
 
             // Decide which layers to rewire and temporarily disconnect at those layers
             Parallel.For(0, indexes.Count, (i) =>
@@ -122,28 +123,26 @@ namespace HNSWIndex
                 var difference = data.Distance(newLabel, oldLabel);
                 var node = data.Nodes[index];
 
-                var firstNonEmptyLayer = -1;
                 for (int layer = node.MaxLayer; layer >= 0; layer--)
                 {
                     // Update on significant difference 
                     using (data.GraphLocker.LockNodeNeighbourhood(node, layer))
                     {
                         var outs = node.OutEdges[layer];
-                        if (outs.Count == 0) continue; // Most likely single point at layer
-                        if (firstNonEmptyLayer == -1) firstNonEmptyLayer = layer;
+                        var isDirtyAlready = dirtyByIndex.ContainsKey(index);
+                        if (outs.Count == 0 && !isDirtyAlready) continue; // Most likely single point at layer
 
+                        // TODO: Replace linq call with manual min finding
                         var minEdge = outs.Min(neighbor => data.Distance(index, neighbor));
-                        if (difference < minEdge) continue; // Skip layer w/o significant change
-                        if (maxLayerToFix[i] == -1) maxLayerToFix[i] = layer;
+                        if (difference < minEdge && !isDirtyAlready) continue; // Skip layer w/o significant change
+
+                        dirtyByIndex.TryAdd(index, layer);
 
                         // Move ep if change would invalid its status
-                        if (index == data.EntryPointId && maxLayerToFix[i] == firstNonEmptyLayer)
+                        // TODO: Replace linq call with manual maxby finding
+                        if (index == cleanAnchors[layer])
                         {
-                            var replacementFound = data.TryReplaceEntryPoint(layer);
-                            if (!replacementFound)
-                            {
-                                data.EntryPointId = -1;
-                            }
+                            cleanAnchors[layer] = outs.Count > 0 ? outs.MaxBy(id => data.Nodes[id].OutEdges.Count) : -1;
                         }
                         connector.RemoveConnectionsAtLayer(node, layer);
                         connector.ResetNodeConnectionsAtLayer(node, layer);
@@ -153,78 +152,47 @@ namespace HNSWIndex
                 data.Items[index] = newLabel;
             });
 
-            var updateMap = new ConcurrentDictionary<int, int>(65536, indexes.Count);
-            for (int i = 0; i < indexes.Count; i++)
-                if (maxLayerToFix[i] >= 0) updateMap[indexes[i]] = maxLayerToFix[i];
-
-
             // Resotore good ep
-            if (data.EntryPointId < 0)
+            if (dirtyByIndex.GetValueOrDefault(data.EntryPointId, -1) >= 0)
             {
-                data.EntryPointId = originalEpId;
-            }
-            if (updateMap.GetValueOrDefault(originalEpId, -1) >= 0)
-            {
-                // Fix if layer is not empty
-                var originalEp = data.Nodes[originalEpId];
-                var epMaxLayerToFix = updateMap[originalEpId];
-                Func<int, bool> epLayerFilter = cand => cand != originalEpId && updateMap.GetValueOrDefault(cand, -1) < epMaxLayerToFix;
-
-                var restorationEntry = navigator.FindEntryPoint(updateMap[originalEpId], data.Items[originalEpId], true, epLayerFilter);
-                for (int layer = Math.Min(updateMap[originalEpId], data.GetTopLayer()); layer >= 0; layer--)
+                for (int layer = dirtyByIndex[data.EntryPointId]; layer >= 0; layer--)
                 {
-                    if (!epLayerFilter(restorationEntry.Id)) break;
-                    var nextEntryCandidate = -1;
-                    if (layer > 0)
-                    {
-                        epLayerFilter = cand => cand != originalEpId && updateMap.GetValueOrDefault(cand, -1) < layer - 1;
-                        nextEntryCandidate = connector.ConnectAtLayer(originalEp, restorationEntry, layer, epLayerFilter);
-                    }
-                    else
-                    {
-                        epLayerFilter = cand => cand != originalEpId && updateMap.GetValueOrDefault(cand, -1) < 0;
-                        nextEntryCandidate = connector.ConnectAtLayer(originalEp, restorationEntry, layer, epLayerFilter);
-                    }
-
-                    restorationEntry = data.Nodes[nextEntryCandidate];
+                    var restorationEntry = data.Nodes[cleanAnchors[layer]];
+                    connector.ConnectAtLayer(data.EntryPoint, restorationEntry, layer);
                 }
-                data.EntryPointId = originalEpId;
-                updateMap[originalEpId] = -1;
+                dirtyByIndex[data.EntryPointId] = -1;
             }
 
             // Insert node with new label with the same index. At this point we have fully restored ep that can be used to navigate graph.
-            Parallel.For(0, indexes.Count, (i) =>
+            Parallel.ForEach(dirtyByIndex, (kvp) =>
             {
-                var updateLayer = maxLayerToFix[i];
-                if (updateLayer < 0) return;
-
-                var index = indexes[i];
+                var index = kvp.Key;
+                var topLayer = kvp.Value;
                 var node = data.Nodes[index];
-                if (index == data.EntryPointId) return;
+                if (topLayer < 0) return;
 
                 // Perform reconnect
                 lock (node.OutEdgesLock)
                 {
-                    Func<int, bool> entryFilter = cand => cand != index && updateMap.GetValueOrDefault(cand, -1) < updateLayer;
-                    var bestPeer = navigator.FindEntryPoint(updateLayer, data.Items[index], true, entryFilter);
-                    for (int layer = updateLayer; layer >= 0; layer--)
+                    // Select best peer which has connections at rebuild layer
+                    Func<int, int, bool> EntryFilter = (cand, layer) => cand != index && dirtyByIndex.GetValueOrDefault(cand, -1) < layer;
+                    var bestPeer = navigator.FindEntryPoint(topLayer, data.Items[index], true, cand => EntryFilter(cand, topLayer));
+                    for (int layer = topLayer; layer >= 0; layer--)
                     {
-                        if (!entryFilter(bestPeer.Id)) bestPeer = data.EntryPoint;
-                        var nextEntryCandidateId = -1;
+                        if (!EntryFilter(bestPeer.Id, layer)) throw new InvalidOperationException("Dirty entry point while reconnecting");
                         if (layer > 0)
                         {
-                            entryFilter = cand => cand != index && updateMap.GetValueOrDefault(cand, -1) < layer - 1;
-                            nextEntryCandidateId = connector.ConnectAtLayer(node, bestPeer, layer, entryFilter);
+                            var nextLayer = layer - 1;
+                            var nextEntryCandidateId = connector.ConnectAtLayer(node, bestPeer, layer, cand => EntryFilter(cand, nextLayer));
+                            bestPeer = nextEntryCandidateId >= 0 ? data.Nodes[nextEntryCandidateId] : data.EntryPoint;
                         }
-                        else
-                        {
-                            entryFilter = cand => cand != index && updateMap.GetValueOrDefault(cand, -1) < 0;
-                            nextEntryCandidateId = connector.ConnectAtLayer(node, bestPeer, layer, entryFilter);
-                        }
+                        else connector.ConnectAtLayer(node, bestPeer, layer);
 
-                        bestPeer = data.Nodes[nextEntryCandidateId];
-                        updateMap[index] -= 1;
+                        // update status
+                        var currDirtyLevel = dirtyByIndex.TryGetValue(index, out var a);
+                        dirtyByIndex.TryUpdate(index, a - 1, a);
                     }
+                    dirtyByIndex.TryUpdate(index, -1, 0);
                 }
             });
         }
@@ -260,7 +228,7 @@ namespace HNSWIndex
 
             var neighboursAmount = Math.Max(parameters.MinNN, k);
             var ep = navigator.FindEntryPoint(layer, query, false);
-            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighboursAmount, query, indexFilter, null, false);
+            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighboursAmount, query, indexFilter, false);
 
             if (k < neighboursAmount)
             {
@@ -282,7 +250,7 @@ namespace HNSWIndex
             for (int layer = Math.Min(ep.MaxLayer, maxLayer); layer >= minLayer; layer--)
             {
                 ep = navigator.FindEntryAtLayer(layer, ep, query, false);
-                var candidates = navigator.SearchLayer(ep.Id, layer, k, query, (index) => index != ep.Id, null, false); // Search closest neighbors except entry point
+                var candidates = navigator.SearchLayer(ep.Id, layer, k, query, (index) => index != ep.Id, false); // Search closest neighbors except entry point
                 result[layer] = candidates.ConvertAll(c => new KNNResult<TLabel, TDistance>(c.Id, data.Items[c.Id], c.Dist));
             }
             return result;
