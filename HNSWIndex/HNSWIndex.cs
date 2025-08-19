@@ -133,7 +133,7 @@ namespace HNSWIndex
                         if (outs.Count == 0 && !isDirtyAlready) continue; // Most likely single point at layer
 
                         // TODO: Replace linq call with manual min finding
-                        var minEdge = outs.Min(neighbor => data.Distance(index, neighbor));
+                        var minEdge = outs.Count > 0 ? outs.Min(neighbor => data.Distance(index, neighbor)) : TDistance.MaxValue;
                         if (difference < minEdge && !isDirtyAlready) continue; // Skip layer w/o significant change
 
                         dirtyByIndex.TryAdd(index, layer);
