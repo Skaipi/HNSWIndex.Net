@@ -25,16 +25,7 @@
                 index.Add(vectors[i]);
             }
 
-            var goodFinds = 0;
-            for (int i = 0; i < vectors.Count; i++)
-            {
-                var result = index.KnnQuery(vectors[i], 1);
-                var bestFound = result[0].Label;
-                if (vectors[i] == bestFound)
-                    goodFinds++;
-            }
-
-            var recall = (float)goodFinds / vectors.Count;
+            var recall = Utils.Recall(index, vectors, vectors);
             Console.WriteLine(recall);
             Assert.IsTrue(recall > 0.90);
         }
@@ -54,16 +45,7 @@
                 index.Add(vectors[i]);
             }
 
-            var goodFinds = 0;
-            for (int i = 0; i < vectors.Count; i++)
-            {
-                var result = index.KnnQuery(vectors[i], 1);
-                var bestFound = result[0].Label;
-                if (vectors[i] == bestFound)
-                    goodFinds++;
-            }
-
-            var recall = (float)goodFinds / vectors.Count;
+            var recall = Utils.Recall(index, vectors, vectors);
             Assert.IsTrue(recall > 0.70 && recall < 0.90);
         }
 
@@ -81,16 +63,7 @@
                 index.Add(vectors[i]);
             }
 
-            var goodFinds = 0;
-            for (int i = 0; i < vectors.Count; i++)
-            {
-                var result = index.KnnQuery(vectors[i], 1);
-                var bestFound = result[0].Label;
-                if (vectors[i] == bestFound)
-                    goodFinds++;
-            }
-
-            var recall = (float)goodFinds / vectors.Count;
+            var recall = Utils.Recall(index, vectors, vectors);
             Assert.IsTrue(recall > 0.90);
         }
 
@@ -108,16 +81,7 @@
                 index.Add(vectors[i]);
             }
 
-            var goodFinds = 0;
-            for (int i = 0; i < vectors.Count; i++)
-            {
-                var result = index.KnnQuery(vectors[i], 1);
-                var bestFound = result[0].Label;
-                if (vectors[i] == bestFound)
-                    goodFinds++;
-            }
-
-            var recall = (float)goodFinds / vectors.Count;
+            var recall = Utils.Recall(index, vectors, vectors);
             Assert.IsTrue(recall < 0.50);
         }
 
