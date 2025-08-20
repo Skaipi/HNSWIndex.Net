@@ -6,10 +6,12 @@ namespace HNSWIndex.Tests
     {
         private static int seed = 65537;
 
+        /// <summary>
+        /// Compute length of a vector
+        /// </summary>
         internal static float Magnitude(float[] vector)
         {
             float magnitude = 0.0f;
-            int step = Vector<float>.Count;
             for (int i = 0; i < vector.Length; i++)
             {
                 magnitude += vector[i] * vector[i];
@@ -17,6 +19,9 @@ namespace HNSWIndex.Tests
             return (float)Math.Sqrt(magnitude);
         }
 
+        /// <summary>
+        /// In place vectors normalization
+        /// </summary>
         internal static void Normalize(float[] vector)
         {
             float normFactor = 1f / Magnitude(vector);
@@ -26,6 +31,9 @@ namespace HNSWIndex.Tests
             }
         }
 
+        /// <summary>
+        /// Get n random d-dimensional vectors.  
+        /// </summary>
         internal static List<float[]> RandomVectors(int vectorSize, int vectorsCount)
         {
             var random = new Random(seed);
