@@ -229,7 +229,7 @@ namespace HNSWIndex
                         else ConnectAtLayer(node, bestPeer, layer);
 
                         // update status
-                        var currDirtyLevel = dirtyByIndex.TryGetValue(index, out var a);
+                        dirtyByIndex.TryGetValue(index, out var a);
                         dirtyByIndex.TryUpdate(index, a - 1, a);
                     }
                     dirtyByIndex.TryUpdate(index, -1, 0);

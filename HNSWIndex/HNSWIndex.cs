@@ -145,9 +145,9 @@ namespace HNSWIndex
 
             if (k < neighboursAmount)
             {
-                return topCandidates.OrderBy(c => c.Dist).Take(k).ToList().ConvertAll(c => new KNNResult<TLabel, TDistance>(c.Id, data.Items[c.Id], c.Dist));
+                return topCandidates.OrderBy(c => c.Dist).Take(k).ToList().ConvertAll(CandidateToResult);
             }
-            return topCandidates.ConvertAll(c => new KNNResult<TLabel, TDistance>(c.Id, data.Items[c.Id], c.Dist));
+            return topCandidates.ConvertAll(CandidateToResult);
         }
 
         /// <summary>
@@ -162,9 +162,9 @@ namespace HNSWIndex
             var result = new List<KNNResult<TLabel, TDistance>>[Math.Min(ep.MaxLayer, maxLayer) + 1];
             for (int layer = Math.Min(ep.MaxLayer, maxLayer); layer >= minLayer; layer--)
             {
-                ep = navigator.FindEntryAtLayer(layer, ep, query, false);
-                var candidates = navigator.SearchLayer(ep.Id, layer, k, query, (index) => index != ep.Id, false); // Search closest neighbors except entry point
-                result[layer] = candidates.ConvertAll(c => new KNNResult<TLabel, TDistance>(c.Id, data.Items[c.Id], c.Dist));
+                var candidates = navigator.SearchLayer(ep.Id, layer, k, query, null, false);
+                ep = data.Nodes[candidates[0].Id];
+                result[layer] = candidates.Count > 1 ? candidates[1..].ConvertAll(CandidateToResult) : new();
             }
             return result;
         }
@@ -199,6 +199,11 @@ namespace HNSWIndex
                 var snapshot = Serializer.Deserialize<HNSWIndexSnapshot<TLabel, TDistance>>(file);
                 return new HNSWIndex<TLabel, TDistance>(distFnc, snapshot);
             }
+        }
+
+        private KNNResult<TLabel, TDistance> CandidateToResult(NodeDistance<TDistance> nodeDistance)
+        {
+            return new KNNResult<TLabel, TDistance>(nodeDistance.Id, data.Items[nodeDistance.Id], nodeDistance.Dist);
         }
 
         private void OnDataResized(object? sender, ReallocateEventArgs e)
