@@ -18,24 +18,32 @@ namespace HNSWIndex.Tests
         {
             Assert.IsNotNull(vectors);
 
+            var path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
             var index = new HNSWIndex<float[], float>(Metrics.SquaredEuclideanMetric.Compute);
 
             for (int i = 0; i < vectors.Count; i++)
                 index.Add(vectors[i]);
 
-            index.Serialize("GraphData.bin");
-            var decodedIndex = HNSWIndex<float[], float>.Deserialize(Metrics.SquaredEuclideanMetric.Compute, "GraphData.bin");
-
-            for (int i = 0; i < vectors.Count; i++)
+            try
             {
-                var originalResults = index.KnnQuery(vectors[i], 5);
-                var decodeResults = decodedIndex.KnnQuery(vectors[i], 5);
-                for (int j = 0; j < originalResults.Count; j++)
+                index.Serialize(path);
+                var decodedIndex = HNSWIndex<float[], float>.Deserialize(Metrics.SquaredEuclideanMetric.Compute, "GraphData.bin");
+
+                for (int i = 0; i < vectors.Count; i++)
                 {
-                    Assert.AreEqual(originalResults[j].Id, decodeResults[j].Id);
-                    Assert.IsTrue(originalResults[j].Label.SequenceEqual(decodeResults[j].Label));
-                    Assert.AreEqual(originalResults[j].Distance, decodeResults[j].Distance);
+                    var originalResults = index.KnnQuery(vectors[i], 5);
+                    var decodeResults = decodedIndex.KnnQuery(vectors[i], 5);
+                    for (int j = 0; j < originalResults.Count; j++)
+                    {
+                        Assert.AreEqual(originalResults[j].Id, decodeResults[j].Id);
+                        Assert.IsTrue(originalResults[j].Label.SequenceEqual(decodeResults[j].Label));
+                        Assert.AreEqual(originalResults[j].Distance, decodeResults[j].Distance);
+                    }
                 }
+            }
+            finally
+            {
+                if (File.Exists(path)) File.Delete(path);
             }
         }
     }
