@@ -1,7 +1,5 @@
 using System.Collections;
-using System.Collections.Concurrent;
 using System.Numerics;
-using System.Runtime.CompilerServices;
 using ProtoBuf;
 
 namespace HNSWIndex

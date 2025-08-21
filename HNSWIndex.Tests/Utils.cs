@@ -1,6 +1,4 @@
-﻿using System.Numerics;
-
-namespace HNSWIndex.Tests
+﻿namespace HNSWIndex.Tests
 {
     internal static class Utils
     {

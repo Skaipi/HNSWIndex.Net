@@ -1,6 +1,5 @@
 ﻿namespace HNSWIndex.Tests
 {
-    using System.Security.Cryptography.X509Certificates;
     using HNSWIndex;
 
     [TestClass]
