@@ -10,7 +10,7 @@
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageId>HNSWIndex</PackageId>
     <Title>HNSWIndex</Title>
-    <Version>1.4.1</Version>
+    <Version>1.5.0</Version>
     <Authors>Mateusz Skarupski</Authors>
     <Company />
     <Product>HNSWIndex</Product>
