@@ -1,13 +1,11 @@
-﻿using System.Numerics;
+﻿using System.Collections;
+using System.Numerics;
 using ProtoBuf;
 
 namespace HNSWIndex
 {
-    public class HNSWIndex<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
+    public class HNSWIndex<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance> where TLabel : IList
     {
-        // Delegates are not serializable and should be set after deserialization
-        private Func<TLabel, TLabel, TDistance> distanceFnc;
-
         private readonly HNSWParameters<TDistance> parameters;
 
         private readonly GraphData<TLabel, TDistance> data;
@@ -22,7 +20,6 @@ namespace HNSWIndex
         public HNSWIndex(Func<TLabel, TLabel, TDistance> distFnc, HNSWParameters<TDistance>? hnswParameters = null)
         {
             hnswParameters ??= new HNSWParameters<TDistance>();
-            distanceFnc = distFnc;
             parameters = hnswParameters;
 
             data = new GraphData<TLabel, TDistance>(distFnc, hnswParameters);
@@ -43,7 +40,6 @@ namespace HNSWIndex
             if (snapshot.DataSnapshot is null)
                 throw new ArgumentNullException(nameof(snapshot.DataSnapshot), "Data cannot be null during deserialization.");
 
-            distanceFnc = distFnc;
             parameters = snapshot.Parameters;
             data = new GraphData<TLabel, TDistance>(snapshot.DataSnapshot, distFnc, snapshot.Parameters);
 
@@ -63,6 +59,7 @@ namespace HNSWIndex
             {
                 itemId = data.AddItem(item);
             }
+            if (itemId == -1) return itemId;
 
             lock (data.Nodes[itemId].OutEdgesLock)
             {
@@ -90,13 +87,7 @@ namespace HNSWIndex
         public void Remove(int itemIndex)
         {
             var item = data.Nodes[itemIndex];
-            for (int layer = item.MaxLayer; layer >= 0; layer--)
-            {
-                data.LockNodeNeighbourhood(item, layer);
-                connector.RemoveConnectionsAtLayer(item, layer);
-                if (layer == 0) data.RemoveItem(itemIndex);
-                data.UnlockNodeNeighbourhood(item, layer);
-            }
+            connector.RemoveNodeConnections(item);
         }
 
         /// <summary>
@@ -111,11 +102,19 @@ namespace HNSWIndex
         }
 
         /// <summary>
+        /// Update items at given indexes with new labels 
+        /// </summary>
+        public void Update(IList<int> indexes, IList<TLabel> labels)
+        {
+            connector.UpdateOldConnections(indexes, labels);
+        }
+
+        /// <summary>
         /// Get list of items inserted into the graph structure
         /// </summary>
         public List<TLabel> Items()
         {
-            return data.Items.Values.ToList();
+            return data.Items.ToList();
         }
 
         /// <summary>
@@ -128,33 +127,45 @@ namespace HNSWIndex
 
         /// <summary>
         /// Get K nearest neighbours of query point. 
-        /// Optionally probide filter function to ignore certain labels.
+        /// Optionally provide filter function to ignore certain labels.
         /// Layer parameters indicates at which layer search should be performed (0 - base layer)
         /// </summary>
         public List<KNNResult<TLabel, TDistance>> KnnQuery(TLabel query, int k, Func<TLabel, bool>? filterFnc = null, int layer = 0)
         {
-            if (data.Nodes.Count - data.RemovedIndexes.Count <= 0) return new List<KNNResult<TLabel, TDistance>>();
+            if (data.Count <= 0 || k < 1) return new List<KNNResult<TLabel, TDistance>>();
 
             Func<int, bool> indexFilter = _ => true;
             if (filterFnc is not null)
                 indexFilter = (index) => filterFnc(data.Items[index]);
 
-
-            TDistance queryDistance(int nodeId, TLabel label)
-            {
-                return distanceFnc(data.Items[nodeId], label);
-            }
-
             var neighboursAmount = Math.Max(parameters.MinNN, k);
-            var distCalculator = new DistanceCalculator<TLabel, TDistance>(queryDistance, query);
-            var ep = navigator.FindEntryPoint(layer, distCalculator);
-            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighboursAmount, distCalculator, indexFilter);
+            var ep = navigator.FindEntryPoint(layer, query, false);
+            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighboursAmount, query, indexFilter, false);
 
             if (k < neighboursAmount)
             {
-                return topCandidates.OrderBy(c => c.Dist).Take(k).ToList().ConvertAll(c => new KNNResult<TLabel, TDistance>(c.Id, data.Items[c.Id], c.Dist));
+                return topCandidates.OrderBy(c => c.Dist).Take(k).ToList().ConvertAll(CandidateToResult);
             }
-            return topCandidates.ConvertAll(c => new KNNResult<TLabel, TDistance>(c.Id, data.Items[c.Id], c.Dist));
+            return topCandidates.ConvertAll(CandidateToResult);
+        }
+
+        /// <summary>
+        /// Perform knn query over all layers in graph. Optionally provide range of layers with max and min layer parameters.
+        /// </summary>
+        public List<KNNResult<TLabel, TDistance>>[] MultiLayerKnnQuery(TLabel query, int k, int maxLayer = int.MaxValue, int minLayer = 0)
+        {
+            // TODO: Add checks for invalid max and min layer
+            if (data.Count <= 0 || k < 1) return [];
+
+            var ep = data.EntryPoint.MaxLayer >= maxLayer ? navigator.FindEntryPoint(maxLayer, query, false) : data.EntryPoint;
+            var result = new List<KNNResult<TLabel, TDistance>>[Math.Min(ep.MaxLayer, maxLayer) + 1];
+            for (int layer = Math.Min(ep.MaxLayer, maxLayer); layer >= minLayer; layer--)
+            {
+                var candidates = navigator.SearchLayer(ep.Id, layer, k, query, null, false);
+                ep = data.Nodes[candidates[0].Id];
+                result[layer] = candidates.Count > 1 ? candidates[1..].ConvertAll(CandidateToResult) : new();
+            }
+            return result;
         }
 
         /// <summary>
@@ -187,6 +198,11 @@ namespace HNSWIndex
                 var snapshot = Serializer.Deserialize<HNSWIndexSnapshot<TLabel, TDistance>>(file);
                 return new HNSWIndex<TLabel, TDistance>(distFnc, snapshot);
             }
+        }
+
+        private KNNResult<TLabel, TDistance> CandidateToResult(NodeDistance<TDistance> nodeDistance)
+        {
+            return new KNNResult<TLabel, TDistance>(nodeDistance.Id, data.Items[nodeDistance.Id], nodeDistance.Dist);
         }
 
         private void OnDataResized(object? sender, ReallocateEventArgs e)

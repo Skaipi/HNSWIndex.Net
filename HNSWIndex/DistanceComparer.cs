@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace HNSWIndex
 {
-    internal struct DistanceComparer<TDistance> : IComparer<NodeDistance<TDistance>> where TDistance : struct, IFloatingPoint<TDistance>
+    internal struct DistanceComparer<TDistance> : IComparer<NodeDistance<TDistance>> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int Compare(NodeDistance<TDistance> x, NodeDistance<TDistance> y)
@@ -14,7 +14,7 @@ namespace HNSWIndex
         }
     }
 
-    internal struct ReverseDistanceComparer<TDistance> : IComparer<NodeDistance<TDistance>> where TDistance : struct, IFloatingPoint<TDistance>
+    internal struct ReverseDistanceComparer<TDistance> : IComparer<NodeDistance<TDistance>> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int Compare(NodeDistance<TDistance> x, NodeDistance<TDistance> y)

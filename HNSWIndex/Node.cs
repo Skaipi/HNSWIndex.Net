@@ -20,18 +20,18 @@ namespace HNSWIndex
 
         // Trick to serialize lists of lists
         [ProtoMember(2, Name = nameof(OutEdges))]
-        private List<IntListWrapper> OutEdgesSerialized
+        private List<NestedListWrapper<int>> OutEdgesSerialized
         {
-            get => OutEdges.Select(l => new IntListWrapper(l)).ToList();
-            set => OutEdges = (value ?? new List<IntListWrapper>()).Select(w => w.Values).ToList();
+            get => OutEdges.Select(l => new NestedListWrapper<int>(l)).ToList();
+            set => OutEdges = (value ?? new List<NestedListWrapper<int>>()).Select(w => w.Values).ToList();
         }
 
         // Trick to serialize lists of lists
         [ProtoMember(3, Name = nameof(InEdges))]
-        private List<IntListWrapper> InEdgesSerialized
+        private List<NestedListWrapper<int>> InEdgesSerialized
         {
-            get => InEdges.Select(l => new IntListWrapper(l)).ToList();
-            set => InEdges = (value ?? new List<IntListWrapper>()).Select(w => w.Values).ToList();
+            get => InEdges.Select(l => new NestedListWrapper<int>(l)).ToList();
+            set => InEdges = (value ?? new List<NestedListWrapper<int>>()).Select(w => w.Values).ToList();
         }
 
         [ProtoAfterDeserialization]
@@ -43,14 +43,5 @@ namespace HNSWIndex
                 InEdges[i] ??= new List<int>();
             }
         }
-    }
-
-    [ProtoContract]
-    struct IntListWrapper
-    {
-        public IntListWrapper(List<int> values) => Values = values;
-
-        [ProtoMember(1)]
-        public List<int> Values;
     }
 }

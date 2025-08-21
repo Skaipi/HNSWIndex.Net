@@ -2,7 +2,7 @@
 
 namespace HNSWIndex
 {
-    internal static class Heuristic<TDistance> where TDistance : struct, IFloatingPoint<TDistance>
+    internal static class Heuristic<TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         internal static IComparer<NodeDistance<TDistance>> FartherFirst = new DistanceComparer<TDistance>();
         internal static IComparer<NodeDistance<TDistance>> CloserFirst = new ReverseDistanceComparer<TDistance>();

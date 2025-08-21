@@ -4,7 +4,7 @@ using ProtoBuf;
 namespace HNSWIndex
 {
     [ProtoContract]
-    public class HNSWParameters<TDistance> where TDistance : struct, IFloatingPoint<TDistance>
+    public class HNSWParameters<TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         /// <summary>
         /// Number of outgoing edges from nodes. Number of edges on layer 0 might not obey this limit.
@@ -47,5 +47,11 @@ namespace HNSWIndex
         /// </summary>
         [ProtoMember(7)]
         public Func<List<NodeDistance<TDistance>>, Func<int, int, TDistance>, int, List<int>> Heuristic { get; set; } = Heuristic<TDistance>.DefaultHeuristic;
+
+        /// <summary>
+        /// Indicates if all points are guaranteed
+        /// </summary>
+        [ProtoMember(8)]
+        public bool ZeroLayerGuaranteed = true;
     }
 }

@@ -8,12 +8,12 @@
         public int Layer;
         public List<VertexHNSW> Vertices = new();
 
-        internal GraphLayer(List<Node> nodes, int layer) 
+        internal GraphLayer(Node[] nodes, int layer)
         {
             Layer = layer;
-            foreach (var node in nodes) 
+            foreach (var node in nodes)
             {
-                Vertices.Add(new VertexHNSW(node, layer));           
+                Vertices.Add(new VertexHNSW(node, layer));
             }
         }
     }

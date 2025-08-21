@@ -1,10 +1,12 @@
-﻿using System.Numerics;
+﻿using System.Collections;
+using System.Numerics;
 
 namespace HNSWIndex
 {
-    internal class GraphNavigator<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
+    internal class GraphNavigator<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance> where TLabel : IList
     {
         private static Func<int, bool> noFilter = _ => true;
+        private static Func<int, bool> noLayerFilter = (_) => true;
 
         private VisitedListPool pool;
         private GraphData<TLabel, TDistance> data;
@@ -19,49 +21,71 @@ namespace HNSWIndex
             closerFirst = new ReverseDistanceComparer<TDistance>();
         }
 
-        internal Node FindEntryPoint<T>(int dstLayer, DistanceCalculator<T, TDistance> dstDistance)
+        /// <summary>
+        /// Find entry point for qury search at specified layer.
+        /// Default locking is in writer mode and can be changed.
+        /// Optional filter function can discriminate specific candidates. 
+        /// </summary>
+        internal Node FindEntryPoint(int dstLayer, TLabel query, bool locking = true, Func<int, bool>? filterFnc = null)
         {
             var bestPeer = data.EntryPoint;
-            var currDist = dstDistance.From(bestPeer.Id);
-
             for (int level = bestPeer.MaxLayer; level > dstLayer; level--)
-            {
-                bool changed = true;
-                while (changed)
-                {
-                    changed = false;
-                    lock (data.Nodes[bestPeer.Id].OutEdgesLock)
-                    {
-                        List<int> connections = bestPeer.OutEdges[level];
-                        int size = connections.Count;
+                bestPeer = FindEntryAtLayer(level, bestPeer, query, locking, filterFnc);
+            return bestPeer;
+        }
 
-                        for (int i = 0; i < size; i++)
+        /// <summary>
+        /// Search for best entry point at specific layer.
+        /// Filter funtion discriminates certain solution.
+        /// </summary>
+        internal Node FindEntryAtLayer(int layer, Node startNode, TLabel query, bool locking = true, Func<int, bool>? filterFnc = null)
+        {
+            filterFnc ??= noLayerFilter;
+
+            var bestPeer = startNode;
+            var bestPeerCandidate = bestPeer;
+            var currDist = data.Distance(bestPeerCandidate.Id, query);
+
+            bool changed = true;
+            while (changed)
+            {
+                changed = false;
+                var shouldLock = locking && filterFnc(bestPeerCandidate.Id); // Rejected by filter are read only
+                using (new OptionalLock(shouldLock, bestPeerCandidate.OutEdgesLock))
+                {
+                    List<int> connections = bestPeerCandidate.OutEdges[layer];
+                    int size = connections.Count;
+
+                    for (int i = 0; i < size; i++)
+                    {
+                        int candidateId = connections[i];
+                        var d = data.Distance(candidateId, query);
+                        if (d < currDist)
                         {
-                            int cand = connections[i];
-                            var d = dstDistance.From(cand);
-                            if (d < currDist)
-                            {
-                                currDist = d;
-                                bestPeer = data.Nodes[cand];
-                                changed = true;
-                            }
+                            currDist = d;
+                            bestPeerCandidate = data.Nodes[candidateId];
+                            if (filterFnc(candidateId)) bestPeer = bestPeerCandidate;
+                            changed = true;
                         }
                     }
                 }
             }
-
             return bestPeer;
         }
 
-        internal List<NodeDistance<TDistance>> SearchLayer<T>(int entryPointId, int layer, int k, DistanceCalculator<T, TDistance> distanceCalculator, Func<int, bool>? filterFnc = null)
+        /// <summary>
+        /// Perform search for k closest neighbors to queryPoint at given layer.
+        /// Search starts at entry point. Some points may be excluded from search with filter funcion.
+        /// Default lock in this method is in writer mode.
+        /// </summary>
+        internal List<NodeDistance<TDistance>> SearchLayer(int entryPointId, int layer, int k, TLabel queryPoint, Func<int, bool>? filterFnc = null, bool locking = true)
         {
             filterFnc ??= noFilter;
             var topCandidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k), fartherFirst);
             var candidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k * 2), closerFirst); // Guess that k*2 space is usually enough
 
-            var entry = new NodeDistance<TDistance> { Dist = distanceCalculator.From(entryPointId), Id = entryPointId };
-            // TODO: Make it max value of TDistance
-            var farthestResultDist = entry.Dist;
+            var entry = new NodeDistance<TDistance> { Dist = data.Distance(entryPointId, queryPoint), Id = entryPointId };
+            var farthestResultDist = TDistance.MaxValue;
 
             if (filterFnc(entryPointId))
             {
@@ -84,8 +108,8 @@ namespace HNSWIndex
                 }
                 candidates.Pop(); // Delay heap reordering in case of early break 
 
-                // expand candidate
-                lock (data.Nodes[closestCandidate.Id].OutEdgesLock)
+                // take lock if needed and expand candidate
+                using (new OptionalLock(locking, data.Nodes[closestCandidate.Id].OutEdgesLock))
                 {
                     var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer];
 
@@ -94,7 +118,7 @@ namespace HNSWIndex
                         int neighbourId = neighboursIds[i];
                         if (visitedList.Contains(neighbourId)) continue;
 
-                        var neighbourDistance = distanceCalculator.From(neighbourId);
+                        var neighbourDistance = data.Distance(neighbourId, queryPoint);
 
                         // enqueue perspective neighbours to expansion list
                         if (topCandidates.Count < k || neighbourDistance < farthestResultDist)

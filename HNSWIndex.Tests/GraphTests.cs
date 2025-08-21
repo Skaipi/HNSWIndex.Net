@@ -25,16 +25,7 @@
                 index.Add(vectors[i]);
             }
 
-            var goodFinds = 0;
-            for (int i = 0; i < vectors.Count; i++)
-            {
-                var result = index.KnnQuery(vectors[i], 1);
-                var bestFound = result[0].Label;
-                if (vectors[i] == bestFound)
-                    goodFinds++;
-            }
-
-            var recall = (float)goodFinds / vectors.Count;
+            var recall = Utils.Recall(index, vectors, vectors);
             Assert.IsTrue(recall > 0.85);
 
             // Ensure in and out edges are balanced
@@ -57,16 +48,7 @@
                 index.Add(vectors[i]);
             });
 
-            var goodFinds = 0;
-            for (int i = 0; i < vectors.Count; i++)
-            {
-                var result = index.KnnQuery(vectors[i], 1);
-                var bestFound = result[0].Label;
-                if (vectors[i] == bestFound)
-                    goodFinds++;
-            }
-
-            var recall = (float)goodFinds / vectors.Count;
+            var recall = Utils.Recall(index, vectors, vectors);
             Assert.IsTrue(recall > 0.85);
 
             // Ensure in and out edges are balanced
@@ -86,16 +68,7 @@
             var index = new HNSWIndex<float[], float>(Metrics.CosineMetric.Compute);
             index.Add(vectors);
 
-            var goodFinds = 0;
-            for (int i = 0; i < vectors.Count; i++)
-            {
-                var result = index.KnnQuery(vectors[i], 1);
-                var bestFound = result[0].Label;
-                if (vectors[i] == bestFound)
-                    goodFinds++;
-            }
-
-            var recall = (float)goodFinds / vectors.Count;
+            var recall = Utils.Recall(index, vectors, vectors);
             Assert.IsTrue(recall > 0.85);
 
             // Ensure in and out edges are balanced
@@ -162,30 +135,15 @@
                 else oddIndexedVectors.Add((vectors[i], id));
             }
 
-            var goodFinds = 0;
-            for (int i = 0; i < vectors.Count; i++)
-            {
-                var result = index.KnnQuery(vectors[i], 1);
-                var bestFound = result[0].Label;
-                if (vectors[i] == bestFound)
-                    goodFinds++;
-            }
-            var insertRecall = (float)goodFinds / vectors.Count;
+            var insertRecall = Utils.Recall(index, vectors, vectors);
 
             for (int i = 0; i < oddIndexedVectors.Count; i++)
             {
                 index.Remove(oddIndexedVectors[i].Id);
             }
 
-            goodFinds = 0;
-            for (int i = 0; i < evenIndexedVectors.Count; i++)
-            {
-                var result = index.KnnQuery(evenIndexedVectors[i].Label, 1);
-                var bestFound = result[0].Label;
-                if (evenIndexedVectors[i].Label == bestFound)
-                    goodFinds++;
-            }
-            var removalRecall = (float)goodFinds / evenIndexedVectors.Count;
+            var evenVectors = evenIndexedVectors.ConvertAll(v => v.Label);
+            var removalRecall = Utils.Recall(index, evenVectors, evenVectors);
 
             // Allow 10% drop after removal
             Assert.IsTrue(insertRecall < removalRecall + 0.1 * insertRecall);
@@ -214,30 +172,15 @@
                 else oddIndexedVectors.Add((vectors[i], id));
             }
 
-            var goodFinds = 0;
-            for (int i = 0; i < vectors.Count; i++)
-            {
-                var result = index.KnnQuery(vectors[i], 1);
-                var bestFound = result[0].Label;
-                if (vectors[i] == bestFound)
-                    goodFinds++;
-            }
-            var insertRecall = (float)goodFinds / vectors.Count;
+            var insertRecall = Utils.Recall(index, vectors, vectors);
 
             Parallel.For(0, oddIndexedVectors.Count, (i) =>
             {
                 index.Remove(oddIndexedVectors[i].Id);
             });
 
-            goodFinds = 0;
-            for (int i = 0; i < evenIndexedVectors.Count; i++)
-            {
-                var result = index.KnnQuery(evenIndexedVectors[i].Label, 1);
-                var bestFound = result[0].Label;
-                if (evenIndexedVectors[i].Label == bestFound)
-                    goodFinds++;
-            }
-            var removalRecall = (float)goodFinds / evenIndexedVectors.Count;
+            var evenVectors = evenIndexedVectors.ConvertAll(v => v.Label);
+            var removalRecall = Utils.Recall(index, evenVectors, evenVectors);
 
             // Allow 10% drop after removal
             Assert.IsTrue(insertRecall < removalRecall + 0.1 * insertRecall);
@@ -266,27 +209,12 @@
                 else oddIndexedVectors.Add((vectors[i], id));
             }
 
-            var goodFinds = 0;
-            for (int i = 0; i < vectors.Count; i++)
-            {
-                var result = index.KnnQuery(vectors[i], 1);
-                var bestFound = result[0].Label;
-                if (vectors[i] == bestFound)
-                    goodFinds++;
-            }
-            var insertRecall = (float)goodFinds / vectors.Count;
 
+            var insertRecall = Utils.Recall(index, vectors, vectors);
             index.Remove(oddIndexedVectors.ConvertAll(x => x.Id));
 
-            goodFinds = 0;
-            for (int i = 0; i < evenIndexedVectors.Count; i++)
-            {
-                var result = index.KnnQuery(evenIndexedVectors[i].Label, 1);
-                var bestFound = result[0].Label;
-                if (evenIndexedVectors[i].Label == bestFound)
-                    goodFinds++;
-            }
-            var removalRecall = (float)goodFinds / evenIndexedVectors.Count;
+            var evenVectors = evenIndexedVectors.ConvertAll(v => v.Label);
+            var removalRecall = Utils.Recall(index, evenVectors, evenVectors);
 
             // Allow 10% drop after removal
             Assert.IsTrue(insertRecall < removalRecall + 0.1 * insertRecall);
@@ -297,6 +225,31 @@
             {
                 Assert.IsTrue(layer.AvgOutEdges == layer.AvgInEdges);
             }
+        }
+
+        [TestMethod]
+        public void UpdateNodesTest()
+        {
+            Assert.IsNotNull(vectors);
+
+            var dim = vectors[0].Length;
+            var newVectors = Utils.RandomVectors(dim, vectors.Count);
+            var indexes = new List<int>(vectors.Count);
+            var index = new HNSWIndex<float[], float>(Metrics.SquaredEuclideanMetric.Compute);
+            for (int i = 0; i < vectors.Count; i++)
+            {
+                Utils.Normalize(vectors[i]);
+                indexes.Add(index.Add(vectors[i]));
+            }
+
+            var recall = Utils.Recall(index, vectors, vectors);
+
+            index.Update(indexes, newVectors);
+
+            var updateRecall = Utils.Recall(index, newVectors, newVectors);
+
+            Console.WriteLine($"Insert recall: {recall} | Update recall: {updateRecall}");
+            Assert.IsTrue(recall < updateRecall + 0.05 * recall);
         }
     }
 }

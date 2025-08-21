@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+﻿using System.Collections;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
@@ -9,23 +9,22 @@ namespace HNSWIndex
     /// All lock related members are ommitted from serialization 
     /// and should be initialized in deserialization constructor.
     /// </summary>
-    internal class GraphData<TLabel, TDistance> where TDistance : struct, IFloatingPoint<TDistance>
+    internal class GraphData<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance> where TLabel : IList
     {
         internal event EventHandler<ReallocateEventArgs>? Reallocated;
 
         internal object indexLock = new object();
 
-        internal List<Node> Nodes { get; private set; }
+        internal Node[] Nodes { get; private set; }
 
-        internal ConcurrentDictionary<int, TLabel> Items { get; private set; }
+        internal TLabel[] Items { get; private set; }
 
         private object removedIndexesLock = new object();
 
         internal Queue<int> RemovedIndexes { get; private set; }
 
-        internal object NeighbourhoodBitmapLock = new object();
 
-        internal List<bool> NeighbourhoodBitmap { get; private set; }
+        internal GraphRegionLocker GraphLocker;
 
         internal object entryPointLock = new object();
 
@@ -35,6 +34,10 @@ namespace HNSWIndex
 
         internal int Capacity;
 
+        internal int Length = 0;
+
+        internal int Count = 0;
+
         private object rngLock = new object();
 
         private Random rng;
@@ -42,6 +45,8 @@ namespace HNSWIndex
         private double distRate;
 
         private int maxEdges;
+
+        private bool zeroLayerGuaranteed;
 
         private Func<TLabel, TLabel, TDistance> distanceFnc;
 
@@ -54,12 +59,13 @@ namespace HNSWIndex
             rng = parameters.RandomSeed < 0 ? new Random() : new Random(parameters.RandomSeed);
             distRate = parameters.DistributionRate;
             maxEdges = parameters.MaxEdges;
+            zeroLayerGuaranteed = parameters.ZeroLayerGuaranteed;
             Capacity = parameters.CollectionSize;
 
             RemovedIndexes = new Queue<int>();
-            Nodes = new List<Node>(parameters.CollectionSize);
-            NeighbourhoodBitmap = new List<bool>(parameters.CollectionSize);
-            Items = new ConcurrentDictionary<int, TLabel>(65536, parameters.CollectionSize); // 2^16 amount of locks
+            Nodes = new Node[parameters.CollectionSize];
+            Items = new TLabel[parameters.CollectionSize];
+            GraphLocker = new GraphRegionLocker(parameters.CollectionSize);
         }
 
         /// <summary>
@@ -71,16 +77,16 @@ namespace HNSWIndex
             rng = parameters.RandomSeed < 0 ? new Random() : new Random(parameters.RandomSeed);
             distRate = parameters.DistributionRate;
             maxEdges = parameters.MaxEdges;
+            zeroLayerGuaranteed = parameters.ZeroLayerGuaranteed;
 
-            Nodes = snapshot.Nodes ?? new List<Node>(parameters.CollectionSize);
-            Items = snapshot.Items ?? new ConcurrentDictionary<int, TLabel>(65536, parameters.CollectionSize);
+            Nodes = snapshot.ParsedNodes ?? new Node[parameters.CollectionSize];
+            Items = snapshot.ParsedItems ?? new TLabel[parameters.CollectionSize];
+            GraphLocker = new GraphRegionLocker(snapshot.Capacity);
             RemovedIndexes = snapshot.RemovedIndexes ?? new Queue<int>();
             EntryPointId = snapshot.EntryPointId;
             Capacity = snapshot.Capacity;
-
-            NeighbourhoodBitmap = new List<bool>(Capacity);
-            for (int i = 0; i < Nodes.Count; i++)
-                NeighbourhoodBitmap.Add(false);
+            Length = snapshot.Length;
+            Count = snapshot.Count;
         }
 
         /// <summary>
@@ -88,6 +94,9 @@ namespace HNSWIndex
         /// </summary>
         internal int AddItem(TLabel item)
         {
+            var topLayer = GetRandomLayer();
+            if (topLayer < 0) return -1;
+
             // Search for empty spot first
             int vacantId = -1;
             lock (removedIndexesLock)
@@ -100,21 +109,30 @@ namespace HNSWIndex
 
             if (vacantId >= 0)
             {
-                Nodes[vacantId] = NewNode(vacantId);
-                Items.TryAdd(vacantId, item);
+                Nodes[vacantId] = NewNode(vacantId, topLayer);
+                Items[vacantId] = item;
+                Count++;
                 return vacantId;
             }
 
             // Allocate new spot
-            vacantId = Nodes.Count;
-            Nodes.Add(NewNode(vacantId));
-            NeighbourhoodBitmap.Add(false);
-            Items.TryAdd(vacantId, item);
-            if (Nodes.Count > Capacity)
+            vacantId = Length++;
+            Nodes[vacantId] = NewNode(vacantId, topLayer);
+            Items[vacantId] = item;
+            if (Length >= Capacity)
             {
-                Capacity = Nodes.Capacity;
+                Capacity *= 2;
+                var nodes = Nodes;
+                var items = Items;
+                Array.Resize(ref nodes, Capacity);
+                Array.Resize(ref items, Capacity);
+                Nodes = nodes;
+                Items = items;
+                // Update other structures
                 Reallocated?.Invoke(this, new ReallocateEventArgs(Capacity));
+                GraphLocker.UpdateCapacity(Capacity);
             }
+            Count++;
             return vacantId;
         }
 
@@ -124,15 +142,29 @@ namespace HNSWIndex
         /// </summary>
         internal void RemoveItem(int itemId)
         {
-            Items.TryRemove(itemId, out _);
+            Items[itemId] = default!;
             lock (removedIndexesLock)
             {
                 RemovedIndexes.Enqueue(itemId);
+                Count--;
             }
         }
 
         /// <summary>
-        /// Try to move the role of entry point to neighbor at given layer
+        /// Replace node at given id
+        /// </summary>
+        internal int UpdateItem(int itemId, TLabel label)
+        {
+            var topLayer = GetRandomLayer();
+            if (topLayer < 0) return -1;
+            Nodes[itemId] = NewNode(itemId, topLayer);
+            Items[itemId] = label;
+            return itemId;
+        }
+
+        /// <summary>
+        /// Try to move the role of entry point to neighbor at given layer.
+        /// This operations should be performed under neighborhhod lock of EP.
         /// </summary>
         internal bool TryReplaceEntryPoint(int layer)
         {
@@ -154,18 +186,24 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Constriction function for new node structure.
+        /// Take random layer based on parameter's distribution rate.
+        /// If ZeroLayerGuaranteed flag is set then all points should be at least at layer zero.
         /// </summary>
-        private Node NewNode(int index)
+        private int GetRandomLayer()
         {
             float random = 0;
             lock (rngLock)
             {
                 random = rng.NextSingle();
             }
+            return zeroLayerGuaranteed ? (int)(-Math.Log(random) * distRate) : (int)(-Math.Log(random) * distRate) - 1;
+        }
 
-            int topLayer = (int)(-Math.Log(random) * distRate);
-
+        /// <summary>
+        /// Constriction function for new node structure.
+        /// </summary>
+        private Node NewNode(int index, int topLayer)
+        {
             var outEdges = new List<List<int>>(topLayer + 1);
             var inEdges = new List<List<int>>(topLayer + 1);
 
@@ -185,73 +223,6 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Wait until all neighbours of the node at given layer are free
-        /// Then lock all those neighbours until processing is done
-        /// </summary>
-        internal void LockNodeNeighbourhood(Node node, int layer)
-        {
-            lock (NeighbourhoodBitmapLock)
-            {
-                while (NeighbourhoodIsBusy(node, layer))
-                {
-                    Monitor.Wait(NeighbourhoodBitmapLock);
-                }
-
-                NeighbourhoodBitmap[node.Id] = true;
-                foreach (var neighbourId in node.OutEdges[layer])
-                    NeighbourhoodBitmap[neighbourId] = true;
-                foreach (var neighbourId in node.InEdges[layer])
-                    NeighbourhoodBitmap[neighbourId] = true;
-            }
-        }
-
-        /// <summary>
-        /// Free all nodes locked with LockNodeNeighbourhood method
-        /// </summary>
-        internal void UnlockNodeNeighbourhood(Node node, int layer)
-        {
-            lock (NeighbourhoodBitmapLock)
-            {
-                NeighbourhoodBitmap[node.Id] = false;
-                foreach (var neighbourId in node.OutEdges[layer])
-                    NeighbourhoodBitmap[neighbourId] = false;
-                foreach (var neighbourId in node.InEdges[layer])
-                    NeighbourhoodBitmap[neighbourId] = false;
-                Monitor.PulseAll(NeighbourhoodBitmapLock);
-            }
-        }
-
-        /// <summary>
-        /// Check if the node and its neighbours are busy at given layer.
-        /// This method is used to acquire lock for region of the graph associated with the node.
-        /// </summary>
-        internal bool NeighbourhoodIsBusy(Node node, int layer)
-        {
-            bool result = NeighbourhoodBitmap[node.Id];
-
-            try
-            {
-                foreach (var neighbourId in node.OutEdges[layer])
-                {
-                    result |= NeighbourhoodBitmap[neighbourId];
-                }
-                foreach (var neighbourId in node.InEdges[layer])
-                {
-                    result |= NeighbourhoodBitmap[neighbourId];
-                }
-            }
-            catch (InvalidOperationException)
-            {
-                return false;
-            }
-            catch (Exception)
-            {
-                throw;
-            }
-            return result;
-        }
-
-        /// <summary>
         /// Get maximum number of edges at given layer.
         /// </summary>
         internal int MaxEdges(int layer)
@@ -266,6 +237,24 @@ namespace HNSWIndex
         internal TDistance Distance(int a, int b)
         {
             return distanceFnc(Items[a], Items[b]);
+        }
+
+        /// <summary>
+        /// Proxy for distance function
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal TDistance Distance(TLabel a, TLabel b)
+        {
+            return distanceFnc(a, b);
+        }
+
+        /// <summary>
+        /// Proxy for distance between graph vertex and arbitrary point
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal TDistance Distance(int a, TLabel b)
+        {
+            return distanceFnc(Items[a], b);
         }
     }
 }

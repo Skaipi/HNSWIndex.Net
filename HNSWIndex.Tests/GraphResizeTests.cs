@@ -19,7 +19,7 @@
             Assert.IsNotNull(vectors);
 
             var parameters = new HNSWParameters<float>() { CollectionSize = 10 };
-            var index = new HNSWIndex<float[], float>(Metrics.SquaredEuclideanMetric.Compute);
+            var index = new HNSWIndex<float[], float>(Metrics.SquaredEuclideanMetric.Compute, parameters);
 
             for (int i = 0; i < vectors.Count; i++)
             {
@@ -27,16 +27,7 @@
                 index.Add(vectors[i]);
             }
 
-            var goodFinds = 0;
-            for (int i = 0; i < vectors.Count; i++)
-            {
-                var result = index.KnnQuery(vectors[i], 1);
-                var bestFound = result[0].Label;
-                if (vectors[i] == bestFound)
-                    goodFinds++;
-            }
-
-            var recall = (float)goodFinds / vectors.Count;
+            var recall = Utils.Recall(index, vectors, vectors);
             Assert.IsTrue(recall > 0.85);
 
             // Ensure in and out edges are balanced
@@ -53,7 +44,7 @@
             Assert.IsNotNull(vectors);
 
             var parameters = new HNSWParameters<float>() { CollectionSize = 10 };
-            var index = new HNSWIndex<float[], float>(Metrics.SquaredEuclideanMetric.Compute);
+            var index = new HNSWIndex<float[], float>(Metrics.SquaredEuclideanMetric.Compute, parameters);
 
             Parallel.For(0, vectors.Count, i =>
             {
@@ -61,16 +52,7 @@
                 index.Add(vectors[i]);
             });
 
-            var goodFinds = 0;
-            for (int i = 0; i < vectors.Count; i++)
-            {
-                var result = index.KnnQuery(vectors[i], 1);
-                var bestFound = result[0].Label;
-                if (vectors[i] == bestFound)
-                    goodFinds++;
-            }
-
-            var recall = (float)goodFinds / vectors.Count;
+            var recall = Utils.Recall(index, vectors, vectors);
             Assert.IsTrue(recall > 0.85);
 
             // Ensure in and out edges are balanced
