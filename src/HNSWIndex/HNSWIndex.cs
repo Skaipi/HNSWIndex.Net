@@ -200,6 +200,41 @@ namespace HNSWIndex
             }
         }
 
+        /// <summary>
+        /// Stateful setter for CollectionSize parameter.
+        /// </summary>
+        public void SetCollectionSize(int collectionSize) => parameters.CollectionSize = collectionSize;
+
+        /// <summary>
+        /// Stateful setter for MaxEdges parameter sometimes mentioned as `M`.
+        /// </summary>
+        public void SetMaxEdges(int maxEdges) => parameters.MaxEdges = maxEdges;
+
+        /// <summary>
+        /// Stateful setter for MaxCandidates parameter sometimes mentioned as `ef_search`.
+        /// </summary>
+        public void SetMaxCandidates(int MaxCandidates) => parameters.MaxCandidates = MaxCandidates;
+
+        /// <summary>
+        /// Stateful setter for DistributionRate parameter.
+        /// </summary>
+        public void SetDistributionRate(float distRate) => parameters.DistributionRate = distRate;
+
+        /// <summary>
+        /// Stateful setter for RandomSeed parameter.
+        /// </summary>
+        public void SetRandomSeed(int randomSeed) => parameters.RandomSeed = randomSeed;
+
+        /// <summary>
+        /// Stateful setter for MinNN parameter sometimes mentioned as `ef`.
+        /// </summary>
+        public void SetMinNN(int minNN) => parameters.MinNN = minNN;
+
+        /// <summary>
+        /// Stateful setter for ZeroLayerGuaranteed parameter.
+        /// </summary>
+        public void SetZeroLayerGuaranteed(bool zeroLayer) => parameters.ZeroLayerGuaranteed = zeroLayer;
+
         private KNNResult<TLabel, TDistance> CandidateToResult(NodeDistance<TDistance> nodeDistance)
         {
             return new KNNResult<TLabel, TDistance>(nodeDistance.Id, data.Items[nodeDistance.Id], nodeDistance.Dist);
