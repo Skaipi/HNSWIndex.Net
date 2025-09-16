@@ -1,0 +1,2 @@
+recursive-include bindings/artifacts/native *
+include README.md

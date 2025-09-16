@@ -9,6 +9,8 @@
 
 # Build artifacts
 artifacts/
+dist/
+*.egg-info
 
 # Visual Studio profiler
 *.psess
@@ -19,6 +21,3 @@ artifacts/
 # Visual Studio
 .vs/
 .vscode/
-
-# Profiler app
-HNSWIndex.Profiler/
