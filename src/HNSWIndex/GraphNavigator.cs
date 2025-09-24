@@ -147,6 +147,76 @@ namespace HNSWIndex
             return topCandidates.Buffer;
         }
 
+        // TODO: Merge this method with SearchLayer
+        internal List<NodeDistance<TDistance>> SearchLayerRange(int entryPointId, int layer, TDistance range, TLabel queryPoint, Func<int, bool>? filterFnc = null, bool locking = true)
+        {
+            filterFnc ??= noFilter;
+            var topCandidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(), fartherFirst);
+            var candidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(), closerFirst);
+
+            var entry = new NodeDistance<TDistance> { Dist = data.Distance(entryPointId, queryPoint), Id = entryPointId };
+            var farthestResultDist = TDistance.MaxValue;
+
+            if (filterFnc(entryPointId))
+            {
+                topCandidates.Push(entry);
+                farthestResultDist = entry.Dist;
+            }
+
+            candidates.Push(entry);
+            var visitedList = pool.GetFreeVisitedList();
+            visitedList.Add(entryPointId);
+
+            // run bfs
+            while (candidates.Buffer.Count > 0)
+            {
+                // get next candidate to check and expand
+                var closestCandidate = candidates.Buffer[0];
+                if (closestCandidate.Dist > farthestResultDist && closestCandidate.Dist > range)
+                {
+                    break;
+                }
+                candidates.Pop(); // Delay heap reordering in case of early break 
+
+                // take lock if needed and expand candidate
+                using (new OptionalLock(locking, data.Nodes[closestCandidate.Id].OutEdgesLock))
+                {
+                    var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer];
+
+                    for (int i = 0; i < neighboursIds.Count; ++i)
+                    {
+                        int neighbourId = neighboursIds[i];
+                        if (visitedList.Contains(neighbourId)) continue;
+
+                        var neighbourDistance = data.Distance(neighbourId, queryPoint);
+
+                        // enqueue perspective neighbours to expansion list
+                        if (neighbourDistance <= range)
+                        {
+                            var selectedCandidate = new NodeDistance<TDistance> { Dist = neighbourDistance, Id = neighbourId };
+                            candidates.Push(selectedCandidate);
+
+                            if (filterFnc(selectedCandidate.Id))
+                                topCandidates.Push(selectedCandidate);
+
+                            if (topCandidates.Buffer[0].Dist > range)
+                                topCandidates.Pop();
+
+                            if (topCandidates.Count > 0)
+                                farthestResultDist = topCandidates.Buffer[0].Dist;
+                        }
+
+                        // update visited list
+                        visitedList.Add(neighbourId);
+                    }
+                }
+            }
+
+            pool.ReleaseVisitedList(visitedList);
+
+            return topCandidates.Buffer;
+        }
+
         internal void OnReallocate(int newCapacity)
         {
             pool.Resize(newCapacity);

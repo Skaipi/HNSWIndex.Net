@@ -150,6 +150,24 @@ namespace HNSWIndex
         }
 
         /// <summary>
+        /// Get all neighbours of query point which are within range distance.
+        /// Optionally provide filter function to ignore certain labels.
+        /// Layer parameters indicates at which layer search should be performed (0 - base layer)
+        /// </summary>
+        public List<KNNResult<TLabel, TDistance>> RangeQuery(TLabel query, TDistance range, Func<TLabel, bool>? filterFnc = null, int layer = 0)
+        {
+            if (data.Count <= 0) return new List<KNNResult<TLabel, TDistance>>();
+
+            Func<int, bool> indexFilter = _ => true;
+            if (filterFnc is not null)
+                indexFilter = (index) => filterFnc(data.Items[index]);
+
+            var ep = navigator.FindEntryPoint(layer, query, false);
+            var topCandidates = navigator.SearchLayerRange(ep.Id, layer, range, query, indexFilter, false);
+            return topCandidates.ConvertAll(CandidateToResult);
+        }
+
+        /// <summary>
         /// Perform knn query over all layers in graph. Optionally provide range of layers with max and min layer parameters.
         /// </summary>
         public List<KNNResult<TLabel, TDistance>>[] MultiLayerKnnQuery(TLabel query, int k, int maxLayer = int.MaxValue, int minLayer = 0)
