@@ -66,6 +66,19 @@ lib.hnsw_knn_query.argtypes = [
     ct.POINTER(ct.c_float),
 ]
 
+lib.hnsw_range_query.restype = ct.c_int
+lib.hnsw_range_query.argtypes = [
+    ct.c_void_p,
+    ct.POINTER(ct.c_float),
+    ct.c_int,
+    ct.c_float,
+    ct.POINTER(ct.POINTER(ct.c_int)),
+    ct.POINTER(ct.POINTER(ct.c_float)),
+]
+
+lib.hnsw_free_results.restype = None
+lib.hnsw_free_results.argtypes = [ct.c_void_p, ct.c_void_p]
+
 lib.hnsw_serialize.restype = ct.c_int
 lib.hnsw_serialize.argtypes = [ct.c_void_p, ct.c_char_p, ct.c_int]
 
@@ -196,3 +209,34 @@ class Index:
         if n < 0:
             raise RuntimeError(_last_error())
         return ids[:n].copy(), dists[:n].copy()
+
+    def range_query(self, query, query_range: float):
+        q = _as_f32(query)
+        if q.ndim != 1 or q.size != self.dim:
+            raise ValueError(f"expected 1D vector of length {self.dim}")
+
+        ids_ptr = ct.POINTER(ct.c_int)()
+        dists_ptr = ct.POINTER(ct.c_float)()
+
+        n = lib.hnsw_knn_query(
+            self._h,
+            q.ctypes.data_as(ct.POINTER(ct.c_float)),
+            q.size,
+            query_range,
+            ct.byref(ids_ptr),
+            ct.byref(dists_ptr),
+        )
+
+        if n < 0:
+            raise RuntimeError(_last_error())
+        if n == 0:
+            return np.empty(0, dtype=np.int32), np.empty(0, dtype=np.float32)
+
+        try:
+            ids = np.ctypeslib.as_array(ids_ptr, shape=(n,)).copy()
+            dists = np.ctypeslib.as_array(dists_ptr, shape=(n,)).copy()
+        finally:
+            # Always free allocated results
+            lib.hnsw_free_results(ids_ptr, dists_ptr)
+
+        return ids, dists

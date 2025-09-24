@@ -1,3 +1,3 @@
-from .bindings import HNSW
+from .bindings import Index
 
-__all__ = ["HNSW"]
+__all__ = ["Index"]

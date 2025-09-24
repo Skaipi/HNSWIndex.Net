@@ -114,6 +114,38 @@ public static unsafe class HNSWIndexExport
         catch (Exception ex) { SetError(ex); return -1; }
     }
 
+    [UnmanagedCallersOnly(EntryPoint = "hnsw_range_query", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static int RangeQuery(nint handle, float* vec, int dim, float range, int** outIds, float** outDists)
+    {
+        try
+        {
+            var q = new float[dim];
+            new Span<float>(vec, dim).CopyTo(q);
+            var res = Get(handle).RangeQuery(q, range);
+            var n = res.Count;
+
+            int* ids = (int*)Marshal.AllocHGlobal(sizeof(int) * n);
+            float* dists = (float*)Marshal.AllocHGlobal(sizeof(float) * n);
+            for (int i = 0; i < n; i++)
+            {
+                ids[i] = res[i].Id;
+                dists[i] = res[i].Distance;
+            }
+            *outIds = ids;
+            *outDists = dists;
+
+            return n;
+        }
+        catch (Exception ex) { SetError(ex); if (outIds != null) *outIds = null; if (outDists != null) *outDists = null; return -1; }
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "hnsw_free_results", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static unsafe void FreeResults(int* ids, float* dists)
+    {
+        if (ids != null) Marshal.FreeHGlobal((nint)ids);
+        if (dists != null) Marshal.FreeHGlobal((nint)dists);
+    }
+
     [UnmanagedCallersOnly(EntryPoint = "hnsw_serialize", CallConvs = new[] { typeof(CallConvCdecl) })]
     public static int Serialize(nint handle, byte* pathUtf8, int len)
     {
