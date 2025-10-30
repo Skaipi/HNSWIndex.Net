@@ -175,7 +175,7 @@ namespace HNSWIndex
                         // TODO: Replace linq call with manual maxby finding
                         if (index == cleanAnchors[layer])
                         {
-                            cleanAnchors[layer] = outs.Count > 0 ? outs.MaxBy(id => data.Nodes[id].OutEdges.Count) : -1;
+                            cleanAnchors[layer] = outs.Count > 0 ? outs.MaxBy(id => data.Nodes[id].OutEdges[layer].Count) : -1;
                         }
                         RemoveConnectionsAtLayer(node, layer);
                         ResetNodeConnectionsAtLayer(node, layer);

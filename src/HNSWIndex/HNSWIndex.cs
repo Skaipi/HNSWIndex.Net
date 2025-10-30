@@ -146,7 +146,20 @@ namespace HNSWIndex
             {
                 return topCandidates.OrderBy(c => c.Dist).Take(k).ToList().ConvertAll(CandidateToResult);
             }
-            return topCandidates.ConvertAll(CandidateToResult);
+            return topCandidates.OrderBy(c => c.Dist).ToList().ConvertAll(CandidateToResult);
+        }
+
+        /// <summary>
+        /// Perform batch knn query.
+        /// </summary>
+        public List<KNNResult<TLabel, TDistance>>[] BatchKnnQuery(IList<TLabel> queries, int k, Func<TLabel, bool>? filterFnc = null, int layer = 0)
+        {
+            var result = new List<KNNResult<TLabel, TDistance>>[queries.Count];
+            Parallel.For(0, queries.Count, (i) =>
+            {
+                result[i] = KnnQuery(queries[i], k, filterFnc, layer);
+            });
+            return result;
         }
 
         /// <summary>
@@ -164,7 +177,20 @@ namespace HNSWIndex
 
             var ep = navigator.FindEntryPoint(layer, query, false);
             var topCandidates = navigator.SearchLayerRange(ep.Id, layer, range, query, indexFilter, false);
-            return topCandidates.ConvertAll(CandidateToResult);
+            return topCandidates.OrderBy(c => c.Dist).ToList().ConvertAll(CandidateToResult);
+        }
+
+        /// <summary>
+        /// Perform batch range query.
+        /// </summary>
+        public List<KNNResult<TLabel, TDistance>>[] BatchRangeQuery(IList<TLabel> queries, TDistance range, Func<TLabel, bool>? filterFnc = null, int layer = 0)
+        {
+            var result = new List<KNNResult<TLabel, TDistance>>[queries.Count];
+            Parallel.For(0, queries.Count, (i) =>
+            {
+                result[i] = RangeQuery(queries[i], range, filterFnc, layer);
+            });
+            return result;
         }
 
         /// <summary>
@@ -179,7 +205,7 @@ namespace HNSWIndex
             var result = new List<KNNResult<TLabel, TDistance>>[Math.Min(ep.MaxLayer, maxLayer) + 1];
             for (int layer = Math.Min(ep.MaxLayer, maxLayer); layer >= minLayer; layer--)
             {
-                var candidates = navigator.SearchLayer(ep.Id, layer, k, query, null, false);
+                var candidates = navigator.SearchLayer(ep.Id, layer, k, query, null, false).OrderBy(c => c.Dist).ToList();
                 ep = data.Nodes[candidates[0].Id];
                 result[layer] = candidates.Count > 1 ? candidates[1..].ConvertAll(CandidateToResult) : new();
             }

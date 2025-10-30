@@ -170,7 +170,7 @@ namespace HNSWIndex
         {
             if (EntryPoint.OutEdges[layer].Count > 0)
             {
-                var neighbourId = EntryPoint.OutEdges[layer].MaxBy(id => Nodes[id].OutEdges.Count);
+                var neighbourId = EntryPoint.OutEdges[layer].MaxBy(id => Nodes[id].OutEdges[layer].Count);
                 EntryPointId = neighbourId;
                 return true;
             }

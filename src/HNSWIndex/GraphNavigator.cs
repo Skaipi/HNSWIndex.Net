@@ -82,7 +82,7 @@ namespace HNSWIndex
         {
             filterFnc ??= noFilter;
             var topCandidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k), fartherFirst);
-            var candidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k * 2), closerFirst); // Guess that k*2 space is usually enough
+            var candidates = new BinaryHeap<NodeDistance<TDistance>>(new List<NodeDistance<TDistance>>(k * 2), closerFirst);
 
             var entry = new NodeDistance<TDistance> { Dist = data.Distance(entryPointId, queryPoint), Id = entryPointId };
             var farthestResultDist = TDistance.MaxValue;
