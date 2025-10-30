@@ -12,6 +12,6 @@ python - <<'PY'
 from hnswindex import Index
 import numpy as np
 idx = Index(128)
-vid = idx.add(np.array(np.ones(128, dtype=np.float32)))
+vid = idx.add(np.array(np.array(np.ones(128, dtype=np.float32))))
 print("ids", vid, "ok")
 PY

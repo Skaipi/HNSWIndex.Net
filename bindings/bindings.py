@@ -1,13 +1,18 @@
+"""
+ctypes bindings for a HNSWIndex.NET.
+"""
+
 import ctypes as ct
 import platform
 import sys
-from importlib.resources import files, as_file
 from pathlib import Path
+from typing import Tuple, List
 
 import numpy as np
+import numpy.typing as npt
 
 
-def get_runtime_id():
+def _get_runtime_id():
     sysname = platform.system()
     arch = platform.machine().lower()
     if sysname == "Windows":
@@ -19,7 +24,7 @@ def get_runtime_id():
     raise RuntimeError(f"Unsupported platform: {sysname} {arch}")
 
 
-def get_lib_filename():
+def _get_lib_filename():
     if sys.platform.startswith("win"):
         return "HNSWIndex.Native.dll"
     if sys.platform == "darwin":
@@ -27,17 +32,17 @@ def get_lib_filename():
     return "HNSWIndex.Native.so"
 
 
-def load_lib():
-    rid = get_runtime_id()
+def _load_lib():
+    rid = _get_runtime_id()
     _base_path = Path(__file__).resolve().parent
-    _lib_path = _base_path / "artifacts" / "native" / rid / get_lib_filename()
+    _lib_path = _base_path / "artifacts" / "native" / rid / _get_lib_filename()
     if not _lib_path.exists():
         raise FileNotFoundError(f"Native library missing {_lib_path}")
     return ct.CDLL(str(_lib_path))
 
 
 # Application Binary Interface
-lib = load_lib()
+lib = _load_lib()
 lib.hnsw_create.restype = ct.c_void_p
 lib.hnsw_create.argtypes = [ct.c_int]
 
@@ -46,11 +51,11 @@ lib.hnsw_free.argtypes = [ct.c_void_p]
 
 lib.hnsw_add.restype = ct.c_int
 lib.hnsw_add.argtypes = [
-    ct.c_void_p,
-    ct.POINTER(ct.POINTER(ct.c_float)),
-    ct.c_int,
-    ct.c_int,
-    ct.POINTER(ct.c_int),
+    ct.c_void_p,  # handle
+    ct.POINTER(ct.c_float),  # vectors
+    ct.c_int,  # count
+    ct.c_int,  # dim
+    ct.POINTER(ct.c_int),  # outIds
 ]
 
 lib.hnsw_remove.restype = None
@@ -58,32 +63,57 @@ lib.hnsw_remove.argtypes = [ct.c_void_p, ct.POINTER(ct.c_int), ct.c_int]
 
 lib.hnsw_knn_query.restype = ct.c_int
 lib.hnsw_knn_query.argtypes = [
-    ct.c_void_p,
-    ct.POINTER(ct.c_float),
-    ct.c_int,
-    ct.c_int,
-    ct.POINTER(ct.c_int),
-    ct.POINTER(ct.c_float),
+    ct.c_void_p,  # handle
+    ct.POINTER(ct.c_float),  # vectors
+    ct.c_int,  # count
+    ct.c_int,  # dim
+    ct.c_int,  # k
+    ct.POINTER(ct.c_int),  # outIds
+    ct.POINTER(ct.c_float),  # outDists
 ]
 
 lib.hnsw_range_query.restype = ct.c_int
 lib.hnsw_range_query.argtypes = [
-    ct.c_void_p,
-    ct.POINTER(ct.c_float),
-    ct.c_int,
-    ct.c_float,
-    ct.POINTER(ct.POINTER(ct.c_int)),
-    ct.POINTER(ct.POINTER(ct.c_float)),
+    ct.c_void_p,  # handle
+    ct.POINTER(ct.c_float),  # vectors
+    ct.c_int,  # count
+    ct.c_int,  # dim
+    ct.c_float,  # range
+    ct.POINTER(ct.c_void_p),  # outIds
+    ct.POINTER(ct.c_void_p),  # outDists
+    ct.POINTER(ct.c_int),  # counts
 ]
 
 lib.hnsw_free_results.restype = None
-lib.hnsw_free_results.argtypes = [ct.c_void_p, ct.c_void_p]
+lib.hnsw_free_results.argtypes = [
+    ct.POINTER(ct.c_void_p),
+    ct.POINTER(ct.c_void_p),
+    ct.c_int,
+]
 
 lib.hnsw_serialize.restype = ct.c_int
 lib.hnsw_serialize.argtypes = [ct.c_void_p, ct.c_char_p, ct.c_int]
 
 lib.hnsw_deserialize.restype = ct.c_void_p
 lib.hnsw_deserialize.argtypes = [ct.c_char_p, ct.c_int]
+
+lib.hnsw_set_collection_size.restype = ct.c_int
+lib.hnsw_set_collection_size.argtypes = [ct.c_void_p, ct.c_int]
+
+lib.hnsw_set_max_edges.restype = ct.c_int
+lib.hnsw_set_max_edges.argtypes = [ct.c_void_p, ct.c_int]
+
+lib.hnsw_set_max_candidates.restype = ct.c_int
+lib.hnsw_set_max_candidates.argtypes = [ct.c_void_p, ct.c_int]
+
+lib.hnsw_set_distribution_rate.restype = ct.c_int
+lib.hnsw_set_distribution_rate.argtypes = [ct.c_void_p, ct.c_float]
+
+lib.hnsw_set_random_seed.restype = ct.c_int
+lib.hnsw_set_random_seed.argtypes = [ct.c_void_p, ct.c_int]
+
+lib.hnsw_set_min_nn.restype = ct.c_int
+lib.hnsw_set_min_nn.argtypes = [ct.c_void_p, ct.c_int]
 
 lib.hnsw_get_last_error_utf8.restype = ct.c_int
 lib.hnsw_get_last_error_utf8.argtypes = [ct.c_void_p, ct.c_int]
@@ -98,12 +128,7 @@ def _last_error():
     return buf.value.decode("utf-8")
 
 
-def _as_f32(x):
-    a = np.asarray(x, dtype=np.float32)
-    return a if a.flags["C_CONTIGUOUS"] else np.ascontiguousarray(a)
-
-
-def _as_2d_f32(x, dim_expected=None):
+def _as_2d_f32(x: npt.ArrayLike, dim_expected=None):
     a = np.asarray(x, dtype=np.float32)
     if a.ndim == 1:
         a = a.reshape(1, -1)
@@ -114,19 +139,9 @@ def _as_2d_f32(x, dim_expected=None):
     return a if a.flags["C_CONTIGUOUS"] else np.ascontiguousarray(a)
 
 
-def _row_ptrs_f32(a2d: np.ndarray):
-    n, _ = a2d.shape
-    T = ct.POINTER(ct.c_float) * n
-    return T(*(a2d[i].ctypes.data_as(ct.POINTER(ct.c_float)) for i in range(n)))
-
-
-def _row_ptrs_i32(a2d: np.ndarray):
-    n, _ = a2d.shape
-    T = ct.POINTER(ct.c_int) * n
-    return T(*(a2d[i].ctypes.data_as(ct.POINTER(ct.c_int)) for i in range(n)))
-
-
 class Index:
+    """HNSW Index class for efficient nearest neighbor querying in high dimensional spaces"""
+
     def __init__(self, dim: int):
         h = lib.hnsw_create(dim)
         if not h:
@@ -140,36 +155,78 @@ class Index:
             lib.hnsw_free(h)
             self._h = None
 
-    def set_collection_size(self, init_size):
-        raise NotImplementedError()
+    def set_collection_size(self, init_size: int):
+        """
+        Set expected number of elements in index to improve efficiency.
 
-    def set_max_edges(self, max_conn):
-        raise NotImplementedError()
+        All parameter setters will throw if used on initialized index.
+        """
+        status = lib.hnsw_set_collection_size(self._h, init_size)
+        if status < 0:
+            raise RuntimeError(_last_error())
 
-    def set_max_candidates(self, max_candidates):
-        raise NotImplementedError()
+    def set_max_edges(self, max_conn: int):
+        """
+        Set maximum number of connections per node. This may improve search quality at the cost of memory usage.
 
-    def set_distribution_rate(self, dist_rate):
-        raise NotImplementedError()
+        All parameter setters will throw if used on initialized index.
+        """
+        status = lib.hnsw_set_max_edges(self._h, max_conn)
+        if status < 0:
+            raise RuntimeError(_last_error())
 
-    def set_random_seed(self, random_seed):
-        raise NotImplementedError()
+    def set_max_candidates(self, max_candidates: int):
+        """
+        Set the size of candidate lists considered during graph construction. This may affect construction time.
 
-    def set_min_nn(self, min_nn):
-        raise NotImplementedError()
+        All parameter setters will throw if used on initialized index.
+        """
+        status = lib.hnsw_set_max_candidates(self._h, max_candidates)
+        if status < 0:
+            raise RuntimeError(_last_error())
 
-    def set_zero_layer_base(self, zero_layer_base):
-        raise NotImplementedError()
+    def set_distribution_rate(self, dist_rate: float):
+        """
+        Set distribution rate for promotig elements to higher layers of the graph.
 
-    # batch add float32 vectors
-    def add(self, vecs) -> np.ndarray:
+        All parameter setters will throw if used on initialized index.
+        """
+        status = lib.hnsw_set_distribution_rate(self._h, dist_rate)
+        if status < 0:
+            raise RuntimeError(_last_error())
+
+    def set_random_seed(self, random_seed: int):
+        """
+        Set the PRNG seed used by the native algorithm.
+
+        All parameter setters will throw if used on initialized index.
+        """
+        status = lib.hnsw_set_random_seed(self._h, random_seed)
+        if status < 0:
+            raise RuntimeError(_last_error())
+
+    def set_min_nn(self, min_nn: int):
+        """
+        Set minimum number of elements retrieved by query.
+        If k is less than min_nn parameter then the k best elements are returned.
+
+        All parameter setters will throw if used on initialized index.
+        """
+        status = lib.hnsw_set_min_nn(self._h, min_nn)
+        if status < 0:
+            raise RuntimeError(_last_error())
+
+    def add(self, vecs: npt.ArrayLike) -> np.ndarray:
+        """
+        Batch add vectors to hnsw index.
+        Each vector should be represented as list of floating point values
+        """
         a = _as_2d_f32(vecs, self.dim)
         n, d = a.shape
-        ptrs = _row_ptrs_f32(a)
         out_ids = np.empty(n, dtype=np.int32)
         rc = lib.hnsw_add(
             self._h,
-            ptrs,
+            a.ctypes.data_as(ct.POINTER(ct.c_float)),
             int(n),
             int(d),
             out_ids.ctypes.data_as(ct.POINTER(ct.c_int)),
@@ -178,8 +235,10 @@ class Index:
             raise RuntimeError(_last_error())
         return out_ids[:rc].copy()
 
-    # Batch remove by ids array
-    def remove(self, ids) -> None:
+    def remove(self, ids: npt.ArrayLike) -> None:
+        """_
+        Batch remove elements from hnsw index.
+        """
         arr = np.asarray(ids, dtype=np.int32).ravel()
         if arr.size == 0:
             return
@@ -192,51 +251,70 @@ class Index:
         if err:
             raise RuntimeError(err)
 
-    def knn(self, query, k: int):
-        q = _as_f32(query)
-        if q.ndim != 1 or q.size != self.dim:
-            raise ValueError(f"expected 1D vector of length {self.dim}")
-        ids = np.empty(k, dtype=np.int32)
-        dists = np.empty(k, dtype=np.float32)
-        n = lib.hnsw_knn_query(
+    def knn_query(
+        self, queries: npt.ArrayLike, k: int
+    ) -> Tuple[np.ndarray[int], np.ndarray[float]]:
+        """
+        Perform batch knn query for provided list of query vectors.
+        """
+        q = _as_2d_f32(queries, self.dim)
+        n = int(q.shape[0])
+        ids = np.empty((n, k), dtype=np.int32)
+        dists = np.empty((n, k), dtype=np.float32)
+        status = lib.hnsw_knn_query(
             self._h,
             q.ctypes.data_as(ct.POINTER(ct.c_float)),
-            q.size,
+            n,
+            self.dim,
             k,
             ids.ctypes.data_as(ct.POINTER(ct.c_int)),
             dists.ctypes.data_as(ct.POINTER(ct.c_float)),
         )
-        if n < 0:
+        if status < 0:
             raise RuntimeError(_last_error())
-        return ids[:n].copy(), dists[:n].copy()
+        return ids.copy(), dists.copy()
 
-    def range_query(self, query, query_range: float):
-        q = _as_f32(query)
-        if q.ndim != 1 or q.size != self.dim:
-            raise ValueError(f"expected 1D vector of length {self.dim}")
+    def range_query(
+        self, queries: npt.ArrayLike, query_range: float
+    ) -> Tuple[List[np.ndarray[int]], List[np.ndarray[float]]]:
+        """
+        Perform batch range query for provided list of query vectors.
+        """
+        q = _as_2d_f32(queries, self.dim)
+        n = int(q.shape[0])
 
-        ids_ptr = ct.POINTER(ct.c_int)()
-        dists_ptr = ct.POINTER(ct.c_float)()
+        ids_pp = (ct.c_void_p * n)()
+        dists_pp = (ct.c_void_p * n)()
+        counts = (ct.c_int * n)()
 
-        n = lib.hnsw_knn_query(
+        status = lib.hnsw_range_query(
             self._h,
             q.ctypes.data_as(ct.POINTER(ct.c_float)),
-            q.size,
+            n,
+            self.dim,
             query_range,
-            ct.byref(ids_ptr),
-            ct.byref(dists_ptr),
+            ids_pp,
+            dists_pp,
+            counts,
         )
 
-        if n < 0:
+        if status < 0:
             raise RuntimeError(_last_error())
-        if n == 0:
-            return np.empty(0, dtype=np.int32), np.empty(0, dtype=np.float32)
 
+        ids, dists = [], []
         try:
-            ids = np.ctypeslib.as_array(ids_ptr, shape=(n,)).copy()
-            dists = np.ctypeslib.as_array(dists_ptr, shape=(n,)).copy()
+            for i in range(n):
+                m = counts[i]
+                if m == 0:
+                    ids.append(np.empty(0, dtype=np.int32))
+                    dists.append(np.empty(0, dtype=np.float32))
+                    continue
+                i_ids = ct.cast(ids_pp[i], ct.POINTER(ct.c_int))
+                i_dists = ct.cast(dists_pp[i], ct.POINTER(ct.c_float))
+                ids.append(np.ctypeslib.as_array(i_ids, shape=(m,)).copy())
+                dists.append(np.ctypeslib.as_array(i_dists, shape=(m,)).copy())
         finally:
-            # Always free allocated results
-            lib.hnsw_free_results(ids_ptr, dists_ptr)
+            # Free allocated results
+            lib.hnsw_free_results(ids_pp, dists_pp, n)
 
         return ids, dists
