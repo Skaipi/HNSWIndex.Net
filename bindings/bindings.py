@@ -91,12 +91,6 @@ lib.hnsw_free_results.argtypes = [
     ct.c_int,
 ]
 
-lib.hnsw_serialize.restype = ct.c_int
-lib.hnsw_serialize.argtypes = [ct.c_void_p, ct.c_char_p, ct.c_int]
-
-lib.hnsw_deserialize.restype = ct.c_void_p
-lib.hnsw_deserialize.argtypes = [ct.c_char_p, ct.c_int]
-
 lib.hnsw_set_collection_size.restype = ct.c_int
 lib.hnsw_set_collection_size.argtypes = [ct.c_void_p, ct.c_int]
 
