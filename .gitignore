@@ -21,3 +21,7 @@ dist/
 # Visual Studio
 .vs/
 .vscode/
+
+# Python bindings
+__pycache__/
+.coverage

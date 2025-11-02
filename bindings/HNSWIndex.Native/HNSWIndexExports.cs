@@ -1,6 +1,5 @@
 ﻿namespace Exports;
 
-using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using HNSWIndex;
@@ -12,6 +11,8 @@ public static unsafe class HNSWIndexExport
     private static void SetError(Exception ex) => _lastError = ex.ToString();
 
     private static nint MakeHandle(HNSWIndex<float[], float> obj) => GCHandle.ToIntPtr(GCHandle.Alloc(obj, GCHandleType.Normal));
+
+    private static HNSWParameters<float> _parameters = new();
 
     private static HNSWIndex<float[], float> Get(nint h)
     {
@@ -41,7 +42,7 @@ public static unsafe class HNSWIndexExport
     {
         try
         {
-            var index = new HNSWIndex<float[], float>(SquaredEuclideanMetric.Compute, null);
+            var index = new HNSWIndex<float[], float>(SquaredEuclideanMetric.Compute, _parameters);
             return MakeHandle(index);
         }
         catch (Exception ex) { SetError(ex); return 0; }
@@ -195,44 +196,44 @@ public static unsafe class HNSWIndexExport
     }
 
     [UnmanagedCallersOnly(EntryPoint = "hnsw_set_collection_size", CallConvs = new[] { typeof(CallConvCdecl) })]
-    public static int SetCollectionSize(nint handle, int collectionSize)
+    public static int SetCollectionSize(int collectionSize)
     {
-        try { Get(handle).SetCollectionSize(collectionSize); return 0; }
+        try { _parameters.CollectionSize = collectionSize; return 0; }
         catch (Exception ex) { SetError(ex); return -1; }
     }
 
     [UnmanagedCallersOnly(EntryPoint = "hnsw_set_max_edges", CallConvs = new[] { typeof(CallConvCdecl) })]
-    public static int SetMaxEdges(nint handle, int maxEdges)
+    public static int SetMaxEdges(int maxEdges)
     {
-        try { Get(handle).SetMaxEdges(maxEdges); return 0; }
+        try { _parameters.MaxEdges = maxEdges; return 0; }
         catch (Exception ex) { SetError(ex); return -1; }
     }
 
     [UnmanagedCallersOnly(EntryPoint = "hnsw_set_max_candidates", CallConvs = new[] { typeof(CallConvCdecl) })]
-    public static int SetMaxCandidates(nint handle, int MaxCandidates)
+    public static int SetMaxCandidates(int maxCandidates)
     {
-        try { Get(handle).SetMaxCandidates(MaxCandidates); return 0; }
+        try { _parameters.MaxCandidates = maxCandidates; return 0; }
         catch (Exception ex) { SetError(ex); return -1; }
     }
 
     [UnmanagedCallersOnly(EntryPoint = "hnsw_set_distribution_rate", CallConvs = new[] { typeof(CallConvCdecl) })]
-    public static int SetDistributionRate(nint handle, float distRate)
+    public static int SetDistributionRate(float distRate)
     {
-        try { Get(handle).SetDistributionRate(distRate); return 0; }
+        try { _parameters.DistributionRate = distRate; return 0; }
         catch (Exception ex) { SetError(ex); return -1; }
     }
 
     [UnmanagedCallersOnly(EntryPoint = "hnsw_set_random_seed", CallConvs = new[] { typeof(CallConvCdecl) })]
-    public static int SetRandomSeed(nint handle, int seed)
+    public static int SetRandomSeed(int seed)
     {
-        try { Get(handle).SetRandomSeed(seed); return 0; }
+        try { _parameters.RandomSeed = seed; return 0; }
         catch (Exception ex) { SetError(ex); return -1; }
     }
 
     [UnmanagedCallersOnly(EntryPoint = "hnsw_set_min_nn", CallConvs = new[] { typeof(CallConvCdecl) })]
-    public static int SetMinNN(nint handle, int minNN)
+    public static int SetMinNN(int minNN)
     {
-        try { Get(handle).SetMinNN(minNN); return 0; }
+        try { _parameters.MinNN = minNN; return 0; }
         catch (Exception ex) { SetError(ex); return -1; }
     }
 }

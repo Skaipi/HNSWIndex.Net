@@ -44,7 +44,7 @@ def _load_lib():
 # Application Binary Interface
 lib = _load_lib()
 lib.hnsw_create.restype = ct.c_void_p
-lib.hnsw_create.argtypes = [ct.c_int]
+lib.hnsw_create.argtypes = []
 
 lib.hnsw_free.restype = None
 lib.hnsw_free.argtypes = [ct.c_void_p]
@@ -92,22 +92,22 @@ lib.hnsw_free_results.argtypes = [
 ]
 
 lib.hnsw_set_collection_size.restype = ct.c_int
-lib.hnsw_set_collection_size.argtypes = [ct.c_void_p, ct.c_int]
+lib.hnsw_set_collection_size.argtypes = [ct.c_int]
 
 lib.hnsw_set_max_edges.restype = ct.c_int
-lib.hnsw_set_max_edges.argtypes = [ct.c_void_p, ct.c_int]
+lib.hnsw_set_max_edges.argtypes = [ct.c_int]
 
 lib.hnsw_set_max_candidates.restype = ct.c_int
-lib.hnsw_set_max_candidates.argtypes = [ct.c_void_p, ct.c_int]
+lib.hnsw_set_max_candidates.argtypes = [ct.c_int]
 
 lib.hnsw_set_distribution_rate.restype = ct.c_int
-lib.hnsw_set_distribution_rate.argtypes = [ct.c_void_p, ct.c_float]
+lib.hnsw_set_distribution_rate.argtypes = [ct.c_float]
 
 lib.hnsw_set_random_seed.restype = ct.c_int
-lib.hnsw_set_random_seed.argtypes = [ct.c_void_p, ct.c_int]
+lib.hnsw_set_random_seed.argtypes = [ct.c_int]
 
 lib.hnsw_set_min_nn.restype = ct.c_int
-lib.hnsw_set_min_nn.argtypes = [ct.c_void_p, ct.c_int]
+lib.hnsw_set_min_nn.argtypes = [ct.c_int]
 
 lib.hnsw_get_last_error_utf8.restype = ct.c_int
 lib.hnsw_get_last_error_utf8.argtypes = [ct.c_void_p, ct.c_int]
@@ -137,11 +137,9 @@ class Index:
     """HNSW Index class for efficient nearest neighbor querying in high dimensional spaces"""
 
     def __init__(self, dim: int):
-        h = lib.hnsw_create(dim)
-        if not h:
-            raise RuntimeError("hnsw_create failed: " + _last_error())
-        self._h = h
         self.dim = dim
+        self._initialized = False
+        self._h = None
 
     def __del__(self):
         h = getattr(self, "_h", None)
@@ -149,13 +147,20 @@ class Index:
             lib.hnsw_free(h)
             self._h = None
 
+    def __initialize(self):
+        h = lib.hnsw_create()
+        if not h:
+            raise RuntimeError("hnsw_create failed: " + _last_error())
+        self._h = h
+        self._initialized = True
+
     def set_collection_size(self, init_size: int):
         """
         Set expected number of elements in index to improve efficiency.
 
         All parameter setters will throw if used on initialized index.
         """
-        status = lib.hnsw_set_collection_size(self._h, init_size)
+        status = lib.hnsw_set_collection_size(init_size)
         if status < 0:
             raise RuntimeError(_last_error())
 
@@ -165,7 +170,7 @@ class Index:
 
         All parameter setters will throw if used on initialized index.
         """
-        status = lib.hnsw_set_max_edges(self._h, max_conn)
+        status = lib.hnsw_set_max_edges(max_conn)
         if status < 0:
             raise RuntimeError(_last_error())
 
@@ -175,7 +180,7 @@ class Index:
 
         All parameter setters will throw if used on initialized index.
         """
-        status = lib.hnsw_set_max_candidates(self._h, max_candidates)
+        status = lib.hnsw_set_max_candidates(max_candidates)
         if status < 0:
             raise RuntimeError(_last_error())
 
@@ -185,7 +190,7 @@ class Index:
 
         All parameter setters will throw if used on initialized index.
         """
-        status = lib.hnsw_set_distribution_rate(self._h, dist_rate)
+        status = lib.hnsw_set_distribution_rate(dist_rate)
         if status < 0:
             raise RuntimeError(_last_error())
 
@@ -195,7 +200,7 @@ class Index:
 
         All parameter setters will throw if used on initialized index.
         """
-        status = lib.hnsw_set_random_seed(self._h, random_seed)
+        status = lib.hnsw_set_random_seed(random_seed)
         if status < 0:
             raise RuntimeError(_last_error())
 
@@ -206,15 +211,17 @@ class Index:
 
         All parameter setters will throw if used on initialized index.
         """
-        status = lib.hnsw_set_min_nn(self._h, min_nn)
+        status = lib.hnsw_set_min_nn(min_nn)
         if status < 0:
             raise RuntimeError(_last_error())
 
-    def add(self, vecs: npt.ArrayLike) -> np.ndarray:
+    def add(self, vecs: npt.ArrayLike) -> np.ndarray[int]:
         """
         Batch add vectors to hnsw index.
         Each vector should be represented as list of floating point values
         """
+        if not self._initialized:
+            self.__initialize()
         a = _as_2d_f32(vecs, self.dim)
         n, d = a.shape
         out_ids = np.empty(n, dtype=np.int32)
@@ -230,7 +237,7 @@ class Index:
         return out_ids[:rc].copy()
 
     def remove(self, ids: npt.ArrayLike) -> None:
-        """_
+        """
         Batch remove elements from hnsw index.
         """
         arr = np.asarray(ids, dtype=np.int32).ravel()
