@@ -254,7 +254,7 @@ class Index:
 
     def knn_query(
         self, queries: npt.ArrayLike, k: int
-    ) -> Tuple[np.ndarray[int], np.ndarray[float]]:
+    ) -> Tuple[npt.NDArray[np.integer], npt.NDArray[np.float32]]:
         """
         Perform batch knn query for provided list of query vectors.
         """

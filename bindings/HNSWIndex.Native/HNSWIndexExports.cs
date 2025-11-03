@@ -43,6 +43,7 @@ public static unsafe class HNSWIndexExport
         try
         {
             var index = new HNSWIndex<float[], float>(SquaredEuclideanMetric.Compute, _parameters);
+            _parameters = new(); // reset parameters for next instance
             return MakeHandle(index);
         }
         catch (Exception ex) { SetError(ex); return 0; }
