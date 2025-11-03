@@ -250,62 +250,6 @@ namespace HNSWIndex
             }
         }
 
-        /// <summary>
-        /// Stateful setter for CollectionSize parameter.
-        /// </summary>
-        public void SetCollectionSize(int collectionSize)
-        {
-            if (initialized) throw new ArgumentException("Index state can not be modified after initialization");
-            parameters.CollectionSize = collectionSize;
-        }
-
-        /// <summary>
-        /// Stateful setter for MaxEdges parameter sometimes mentioned as `M`.
-        /// </summary>
-        public void SetMaxEdges(int maxEdges)
-        {
-            if (initialized) throw new ArgumentException("Index state can not be modified after initialization");
-            parameters.MaxEdges = maxEdges;
-        }
-
-        /// <summary>
-        /// Stateful setter for MaxCandidates parameter sometimes mentioned as `ef_search`.
-        /// </summary>
-        public void SetMaxCandidates(int MaxCandidates)
-        {
-            if (initialized) throw new ArgumentException("Index state can not be modified after initialization");
-            parameters.MaxCandidates = MaxCandidates;
-        }
-
-
-        /// <summary>
-        /// Stateful setter for DistributionRate parameter.
-        /// </summary>
-        public void SetDistributionRate(float distRate)
-        {
-            if (initialized) throw new ArgumentException("Index state can not be modified after initialization");
-            parameters.DistributionRate = distRate;
-        }
-
-
-        /// <summary>
-        /// Stateful setter for RandomSeed parameter.
-        /// </summary>
-        public void SetRandomSeed(int randomSeed)
-        {
-            if (initialized) throw new ArgumentException("Index state can not be modified after initialization");
-            parameters.RandomSeed = randomSeed;
-        }
-
-        /// <summary>
-        /// Stateful setter for MinNN parameter sometimes mentioned as `ef`.
-        /// </summary>
-        public void SetMinNN(int minNN)
-        {
-            if (initialized) throw new ArgumentException("Index state can not be modified after initialization");
-            parameters.MinNN = minNN;
-        }
-
         private KNNResult<TLabel, TDistance> CandidateToResult(NodeDistance<TDistance> nodeDistance)
         {
             return new KNNResult<TLabel, TDistance>(nodeDistance.Id, data.Items[nodeDistance.Id], nodeDistance.Dist);
