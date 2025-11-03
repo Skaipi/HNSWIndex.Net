@@ -13,7 +13,7 @@ namespace HNSWIndex
     }
 
     [ProtoContract]
-    internal struct NestedArrayWrapper<T> where T : IList
+    internal struct NestedArrayWrapper<T>
     {
         public NestedArrayWrapper(T values) => Values = values;
 

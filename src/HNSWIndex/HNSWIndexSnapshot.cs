@@ -8,7 +8,7 @@ namespace HNSWIndex
     /// Wrapper for HNSWIndex for serialization.
     /// </summary>
     [ProtoContract]
-    internal class HNSWIndexSnapshot<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance> where TLabel : IList
+    internal class HNSWIndexSnapshot<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         [ProtoMember(1)]
         internal HNSWParameters<TDistance>? Parameters { get; set; }

@@ -3,7 +3,7 @@ using System.Numerics;
 
 namespace HNSWIndex
 {
-    internal class GraphNavigator<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance> where TLabel : IList
+    internal class GraphNavigator<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         private static Func<int, bool> noFilter = _ => true;
         private static Func<int, bool> noLayerFilter = (_) => true;

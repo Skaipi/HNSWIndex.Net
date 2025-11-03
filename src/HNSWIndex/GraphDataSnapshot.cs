@@ -8,7 +8,7 @@ namespace HNSWIndex
     /// Wrapper for GraphData for serialization.
     /// </summary>
     [ProtoContract]
-    internal class GraphDataSnapshot<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance> where TLabel : IList
+    internal class GraphDataSnapshot<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         [ProtoMember(1)]
         internal Node[]? Nodes { get; set; }

@@ -4,7 +4,7 @@ using ProtoBuf;
 
 namespace HNSWIndex
 {
-    public class HNSWIndex<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance> where TLabel : IList
+    public class HNSWIndex<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         private readonly HNSWParameters<TDistance> parameters;
 
