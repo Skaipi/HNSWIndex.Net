@@ -85,7 +85,7 @@
             Assert.IsTrue(recall < 0.50);
         }
 
-        public static List<int> BruteForceHeuristic(List<NodeDistance<float>> candidates, Func<int, int, float> distanceFnc, int maxEdges)
+        public static List<int> BruteForceHeuristic(NodeDistance<float>[] candidates, Func<int, int, float> distanceFnc, int maxEdges)
         {
             return candidates.OrderBy(x => x.Dist).Take(maxEdges).ToList().ConvertAll(x => x.Id);
         }

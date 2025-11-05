@@ -247,9 +247,14 @@
             index.Update(indexes, newVectors);
 
             var updateRecall = Utils.Recall(index, newVectors, newVectors);
-
-            Console.WriteLine($"Insert recall: {recall} | Update recall: {updateRecall}");
             Assert.IsTrue(recall < updateRecall + 0.05 * recall);
+
+            // Ensure in and out edges are balanced
+            // var info = index.GetInfo();
+            // foreach (var layer in info.Layers)
+            // {
+            //     Assert.IsTrue(layer.AvgOutEdges == layer.AvgInEdges);
+            // }
         }
     }
 }

@@ -3,93 +3,107 @@ using System.Runtime.CompilerServices;
 
 namespace HNSWIndex
 {
-    internal struct BinaryHeap<T>
+    internal struct BinaryHeap<T, TComparer> where TComparer : struct, IComparer<T>
     {
-        internal IComparer<T> Comparer;
-        internal List<T> Buffer;
-        internal bool Any => Buffer.Count > 0;
-        internal int Count => Buffer.Count;
-        internal BinaryHeap(List<T> buffer) : this(buffer, Comparer<T>.Default) { }
-        internal BinaryHeap(List<T> buffer, IComparer<T> comparer)
+        private TComparer comparer;
+        private T[] buffer;
+        private int _count;
+        internal bool Any => _count > 0;
+        internal int Count => _count;
+
+        internal BinaryHeap(int capacity = 0, TComparer cmp = default)
         {
-            Buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
-            Comparer = comparer;
-            for (int i = 1; i < Buffer.Count; ++i) { SiftUp(i); }
+            buffer = capacity > 0 ? new T[capacity] : Array.Empty<T>();
+            comparer = cmp;
+        }
+
+        internal BinaryHeap(ReadOnlySpan<T> items, TComparer cmp = default)
+        {
+            _count = items.Length;
+            buffer = _count == 0 ? Array.Empty<T>() : items.ToArray();
+            comparer = cmp;
+            // heapify
+            for (int i = (buffer.Length >> 1) - 1; i >= 0; --i) SiftDown(i, buffer[i], _count);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void Push(T item)
         {
-            Buffer.Add(item);
-            SiftUp(Buffer.Count - 1);
+            if (_count == buffer.Length) ExtendBuffer();
+            SiftUp(_count++, item);
         }
 
-        internal T Top()
+        internal T Peek()
         {
-            return Buffer[0];
+            return buffer[0];
+        }
+
+        internal T[] ToArray()
+        {
+            return buffer[0.._count];
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal T Pop()
         {
-            if (Buffer.Count > 0)
-            {
-                var result = Buffer[0];
+            int jitCount = _count;
+            if (jitCount == 0) throw new InvalidOperationException("Heap is empty");
 
-                Buffer[0] = Buffer[Buffer.Count - 1];
-                Buffer.RemoveAt(Buffer.Count - 1);
-                SiftDown(0);
+            var result = buffer[0];
+            var lastLeaf = buffer[--jitCount];
+            _count = jitCount;
 
-                return result;
-            }
-
-            throw new InvalidOperationException("Heap is empty");
+            if (jitCount != 0) SiftDown(0, lastLeaf, jitCount);
+            return result;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void SiftDown(int i)
+        private void SiftDown(int i, T item, int count)
         {
-            if (Buffer.Count == 0) return;
-
-            var item = Buffer[i];
-            var half = Buffer.Count >> 1; // Only need to check until the first non-leaf node
+            var jitBuffer = buffer;
+            var jitComparer = comparer;
+            var half = count >> 1;
 
             while (i < half)
             {
                 int left = (i << 1) + 1;
                 int right = left + 1;
-                int maxChild = (right < Buffer.Count && Comparer.Compare(Buffer[left], Buffer[right]) < 0) ? right : left;
+                int maxChild = (right < count && jitComparer.Compare(jitBuffer[left], jitBuffer[right]) < 0) ? right : left;
 
-                if (Comparer.Compare(Buffer[maxChild], item) <= 0)
-                    break;
+                if (jitComparer.Compare(jitBuffer[maxChild], item) <= 0) break;
 
-                Buffer[i] = Buffer[maxChild];
+                jitBuffer[i] = jitBuffer[maxChild];
                 i = maxChild;
             }
 
-            Buffer[i] = item;
+            jitBuffer[i] = item;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void SiftUp(int i)
+        private void SiftUp(int i, T item)
         {
-            T item = Buffer[i];
+            var jitBuffer = buffer;
+            var jitComparer = comparer;
+
             while (i > 0)
             {
                 int p = (i - 1) >> 1;
-                T parent = Buffer[p];
-                if (Comparer.Compare(item, parent) <= 0)
-                {
-                    break;
-                }
+                T parent = jitBuffer[p];
+                if (jitComparer.Compare(item, parent) <= 0) break;
 
-                // Move parent down
-                Buffer[i] = parent;
+                // Move parent down and keep current item "hanging"
+                jitBuffer[i] = parent;
                 i = p;
             }
 
             // Place the original item at its correct position
-            Buffer[i] = item;
+            jitBuffer[i] = item;
+        }
+
+        private void ExtendBuffer()
+        {
+            int newSize = buffer.Length == 0 ? 16 : buffer.Length * 2;
+            Array.Resize(ref buffer, newSize);
         }
     }
 }

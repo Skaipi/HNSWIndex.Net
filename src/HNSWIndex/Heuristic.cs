@@ -4,35 +4,40 @@ namespace HNSWIndex
 {
     internal static class Heuristic<TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
-        internal static IComparer<NodeDistance<TDistance>> FartherFirst = new DistanceComparer<TDistance>();
-        internal static IComparer<NodeDistance<TDistance>> CloserFirst = new ReverseDistanceComparer<TDistance>();
+        internal static DistanceComparer<TDistance> FartherFirst = new DistanceComparer<TDistance>();
+        internal static ReverseDistanceComparer<TDistance> CloserFirst = new ReverseDistanceComparer<TDistance>();
 
-        internal static List<int> DefaultHeuristic(List<NodeDistance<TDistance>> candidates, Func<int, int, TDistance> distanceFnc, int maxEdges)
+        internal static List<int> DefaultHeuristic(NodeDistance<TDistance>[] candidates, Func<int, int, TDistance> distanceFnc, int maxEdges)
         {
-            if (candidates.Count < maxEdges)
+            if (candidates.Length < maxEdges)
             {
-                return candidates.ConvertAll(x => x.Id);
+                var ids = new List<int>(candidates.Length);
+                for (int i = 0; i < candidates.Length; i++) ids.Add(candidates[i].Id);
+                return ids;
             }
 
             var resultList = new List<NodeDistance<TDistance>>(maxEdges + 1);
-            var candidatesHeap = new BinaryHeap<NodeDistance<TDistance>>(candidates, CloserFirst);
-
-            while (candidatesHeap.Count > 0)
+            Array.Sort(candidates, FartherFirst); // FarherFirst applies to heap ordering not sorting
+            for (int i = 0; i < candidates.Length && resultList.Count < maxEdges; i++)
             {
-                if (resultList.Count >= maxEdges)
-                    break;
+                // Make local copy to maybe improve performance
+                var candidate = candidates[i];
+                var candidateId = candidate.Id;
+                var candidateDist = candidate.Dist;
 
-                var currentCandidate = candidatesHeap.Pop();
-                var candidateDist = currentCandidate.Dist;
-
-                // Candidate is closer to designated point than any other already connected point
-                if (resultList.TrueForAll(connectedNode => distanceFnc(connectedNode.Id, currentCandidate.Id) > candidateDist))
+                bool acceptable = true;
+                for (int j = 0; j < resultList.Count; j++)
                 {
-                    resultList.Add(currentCandidate);
+                    var s = resultList[j];
+                    if (distanceFnc(s.Id, candidateId) < candidateDist) { acceptable = false; break; }
                 }
+
+                if (acceptable) resultList.Add(candidate);
             }
 
-            return resultList.ConvertAll(x => x.Id);
+            var outIds = new List<int>(resultList.Count);
+            for (int k = 0; k < resultList.Count; k++) outIds.Add(resultList[k].Id);
+            return outIds;
         }
     }
 }
