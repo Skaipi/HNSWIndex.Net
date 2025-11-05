@@ -26,11 +26,11 @@ namespace HNSWIndex
         /// Default locking is in writer mode and can be changed.
         /// Optional filter function can discriminate specific candidates. 
         /// </summary>
-        internal Node FindEntryPoint(int dstLayer, TLabel query, bool locking = true, Func<int, bool>? filterFnc = null)
+        internal Node FindEntryPoint(int dstLayer, TLabel query, Func<int, bool>? filterFnc = null)
         {
             var bestPeer = data.EntryPoint;
-            for (int level = bestPeer.MaxLayer; level > dstLayer; level--)
-                bestPeer = FindEntryAtLayer(level, bestPeer, query, locking, filterFnc);
+            for (int layer = bestPeer.MaxLayer; layer > dstLayer; layer--)
+                bestPeer = FindEntryAtLayer(layer, bestPeer, query, filterFnc);
             return bestPeer;
         }
 
@@ -50,23 +50,19 @@ namespace HNSWIndex
             while (changed)
             {
                 changed = false;
-                var shouldLock = locking && filterFnc(bestPeerCandidate.Id); // Rejected by filter are read only
-                using (new OptionalLock(shouldLock, bestPeerCandidate.OutEdgesLock))
-                {
-                    List<int> connections = bestPeerCandidate.OutEdges[layer];
-                    int size = connections.Count;
+                List<int> connections = bestPeerCandidate.OutEdges[layer];
+                int size = connections.Count;
 
-                    for (int i = 0; i < size; i++)
+                for (int i = 0; i < size; i++)
+                {
+                    int candidateId = connections[i];
+                    var d = data.Distance(candidateId, query);
+                    if (d < currDist)
                     {
-                        int candidateId = connections[i];
-                        var d = data.Distance(candidateId, query);
-                        if (d < currDist)
-                        {
-                            currDist = d;
-                            bestPeerCandidate = data.Nodes[candidateId];
-                            if (filterFnc(candidateId)) bestPeer = bestPeerCandidate;
-                            changed = true;
-                        }
+                        currDist = d;
+                        bestPeerCandidate = data.Nodes[candidateId];
+                        if (filterFnc(candidateId)) bestPeer = bestPeerCandidate;
+                        changed = true;
                     }
                 }
             }
@@ -108,17 +104,14 @@ namespace HNSWIndex
                 }
                 candidates.Pop(); // Delay heap reordering in case of early break 
 
-                // take lock if needed and expand candidate
-                using (new OptionalLock(locking, data.Nodes[closestCandidate.Id].OutEdgesLock))
+                var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer];
+
+                for (int i = 0; i < neighboursIds.Count; ++i)
                 {
-                    var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer];
+                    int neighbourId = neighboursIds[i];
+                    if (visitedList.Contains(neighbourId)) continue;
 
-                    for (int i = 0; i < neighboursIds.Count; ++i)
-                    {
-                        int neighbourId = neighboursIds[i];
-                        if (visitedList.Contains(neighbourId)) continue;
-
-                        var neighbourDistance = data.Distance(neighbourId, queryPoint);
+                    var neighbourDistance = data.Distance(neighbourId, queryPoint);
 
                         // enqueue perspective neighbours to expansion list
                         if (topCandidates.Count < k || neighbourDistance < farthestResultDist)
@@ -136,9 +129,8 @@ namespace HNSWIndex
                                 farthestResultDist = topCandidates.Buffer[0].Dist;
                         }
 
-                        // update visited list
-                        visitedList.Add(neighbourId);
-                    }
+                    // update visited list
+                    visitedList.Add(neighbourId);
                 }
             }
 
@@ -178,10 +170,7 @@ namespace HNSWIndex
                 }
                 candidates.Pop(); // Delay heap reordering in case of early break 
 
-                // take lock if needed and expand candidate
-                using (new OptionalLock(locking, data.Nodes[closestCandidate.Id].OutEdgesLock))
-                {
-                    var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer];
+                var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer];
 
                     for (int i = 0; i < neighboursIds.Count; ++i)
                     {
@@ -206,9 +195,8 @@ namespace HNSWIndex
                                 farthestResultDist = topCandidates.Buffer[0].Dist;
                         }
 
-                        // update visited list
-                        visitedList.Add(neighbourId);
-                    }
+                    // update visited list
+                    visitedList.Add(neighbourId);
                 }
             }
 

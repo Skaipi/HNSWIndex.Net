@@ -145,8 +145,8 @@ namespace HNSWIndex
                 indexFilter = (index) => filterFnc(data.Items[index]);
 
             var neighboursAmount = Math.Max(parameters.MinNN, k);
-            var ep = navigator.FindEntryPoint(layer, query, false);
-            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighboursAmount, query, indexFilter, false);
+            var ep = navigator.FindEntryPoint(layer, query);
+            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighboursAmount, query, indexFilter);
 
             if (k < neighboursAmount)
             {
@@ -181,8 +181,8 @@ namespace HNSWIndex
             if (filterFnc is not null)
                 indexFilter = (index) => filterFnc(data.Items[index]);
 
-            var ep = navigator.FindEntryPoint(layer, query, false);
-            var topCandidates = navigator.SearchLayerRange(ep.Id, layer, range, query, indexFilter, false);
+            var ep = navigator.FindEntryPoint(layer, query);
+            var topCandidates = navigator.SearchLayerRange(ep.Id, layer, range, query, indexFilter);
             return topCandidates.OrderBy(c => c.Dist).ToList().ConvertAll(CandidateToResult);
         }
 
@@ -207,11 +207,11 @@ namespace HNSWIndex
             // TODO: Add checks for invalid max and min layer
             if (data.Count <= 0 || k < 1) return [];
 
-            var ep = data.EntryPoint.MaxLayer >= maxLayer ? navigator.FindEntryPoint(maxLayer, query, false) : data.EntryPoint;
+            var ep = data.EntryPoint.MaxLayer >= maxLayer ? navigator.FindEntryPoint(maxLayer, query) : data.EntryPoint;
             var result = new List<KNNResult<TLabel, TDistance>>[Math.Min(ep.MaxLayer, maxLayer) + 1];
             for (int layer = Math.Min(ep.MaxLayer, maxLayer); layer >= minLayer; layer--)
             {
-                var candidates = navigator.SearchLayer(ep.Id, layer, k, query, null, false).OrderBy(c => c.Dist).ToList();
+                var candidates = navigator.SearchLayer(ep.Id, layer, k, query).OrderBy(c => c.Dist).ToList();
                 ep = data.Nodes[candidates[0].Id];
                 result[layer] = candidates.Count > 1 ? candidates[1..].ConvertAll(CandidateToResult) : new();
             }
