@@ -12,6 +12,7 @@ public static unsafe class HNSWIndexExport
 
     private static nint MakeHandle(HNSWIndex<float[], float> obj) => GCHandle.ToIntPtr(GCHandle.Alloc(obj, GCHandleType.Normal));
 
+    //TODO: Handle multi instance scenario
     private static HNSWParameters<float> _parameters = new();
 
     private static HNSWIndex<float[], float> Get(nint h)
@@ -60,6 +61,7 @@ public static unsafe class HNSWIndexExport
     [UnmanagedCallersOnly(EntryPoint = "hnsw_add", CallConvs = new[] { typeof(CallConvCdecl) })]
     public static int Add(nint handle, float* vectors, int count, int dim, int* outIds)
     {
+        if (handle == 0) return 0;
         try
         {
             if (vectors == null || count <= 0 || dim <= 0) return 0;
@@ -84,23 +86,26 @@ public static unsafe class HNSWIndexExport
     }
 
     [UnmanagedCallersOnly(EntryPoint = "hnsw_remove", CallConvs = new[] { typeof(CallConvCdecl) })]
-    public static void Remove(nint handle, int* ids, int count)
+    public static int Remove(nint handle, int* ids, int count)
     {
+        if (handle == 0) return 0;
         try
         {
-            if (ids == null || count <= 0) return;
+            if (ids == null || count <= 0) return 0;
 
             var list = new List<int>(count);
             for (int i = 0; i < count; i++) list.Add(ids[i]);
 
-            Get(handle).Remove(list); // Uses managed batch Remove
+            Get(handle).Remove(list);
+            return 0;
         }
-        catch (Exception ex) { SetError(ex); }
+        catch (Exception ex) { SetError(ex); return -1; }
     }
 
     [UnmanagedCallersOnly(EntryPoint = "hnsw_knn_query", CallConvs = new[] { typeof(CallConvCdecl) })]
     public static int KnnQuery(nint handle, float* vectors, int count, int dim, int k, int* outIds, float* outDists)
     {
+        if (handle == 0) return 0;
         try
         {
             var queries = new List<float[]>(count);
@@ -132,6 +137,7 @@ public static unsafe class HNSWIndexExport
     [UnmanagedCallersOnly(EntryPoint = "hnsw_range_query", CallConvs = new[] { typeof(CallConvCdecl) })]
     public static int RangeQuery(nint handle, float* vectors, int count, int dim, float range, void** outIds, void** outDists, int* counts)
     {
+        if (handle == 0) return 0;
         try
         {
             var queries = new List<float[]>(count);

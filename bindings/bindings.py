@@ -58,7 +58,7 @@ lib.hnsw_add.argtypes = [
     ct.POINTER(ct.c_int),  # outIds
 ]
 
-lib.hnsw_remove.restype = None
+lib.hnsw_remove.restype = ct.c_int
 lib.hnsw_remove.argtypes = [ct.c_void_p, ct.POINTER(ct.c_int), ct.c_int]
 
 lib.hnsw_knn_query.restype = ct.c_int
@@ -136,8 +136,9 @@ def _as_2d_f32(x: npt.ArrayLike, dim_expected=None):
 class Index:
     """HNSW Index class for efficient nearest neighbor querying in high dimensional spaces"""
 
-    def __init__(self, dim: int):
+    def __init__(self, dim: int, metric="l2sq"):
         self.dim = dim
+        self.metric = metric
         self._initialized = False
         self._h = None
 
@@ -186,7 +187,7 @@ class Index:
 
     def set_distribution_rate(self, dist_rate: float):
         """
-        Set distribution rate for promotig elements to higher layers of the graph.
+        Set distribution rate for promoting elements to higher layers of the graph.
 
         All parameter setters will throw if used on initialized index.
         """
@@ -207,7 +208,7 @@ class Index:
     def set_min_nn(self, min_nn: int):
         """
         Set minimum number of elements retrieved by query.
-        If k is less than min_nn parameter then the k best elements are returned.
+        If k is less than min_nn parameter then k best elements are returned and remaining elements are discarded.
 
         All parameter setters will throw if used on initialized index.
         """
@@ -215,7 +216,7 @@ class Index:
         if status < 0:
             raise RuntimeError(_last_error())
 
-    def add(self, vecs: npt.ArrayLike) -> np.ndarray[int]:
+    def add(self, vecs: npt.ArrayLike) -> npt.NDArray[np.int]:
         """
         Batch add vectors to hnsw index.
         Each vector should be represented as list of floating point values
@@ -243,14 +244,13 @@ class Index:
         arr = np.asarray(ids, dtype=np.int32).ravel()
         if arr.size == 0:
             return
-        lib.hnsw_remove(
+        result = lib.hnsw_remove(
             self._h,
             arr.ctypes.data_as(ct.POINTER(ct.c_int)),
             int(arr.size),
         )
-        err = _last_error()
-        if err:
-            raise RuntimeError(err)
+        if result < 0:
+            raise RuntimeError(_last_error())
 
     def knn_query(
         self, queries: npt.ArrayLike, k: int
@@ -277,7 +277,7 @@ class Index:
 
     def range_query(
         self, queries: npt.ArrayLike, query_range: float
-    ) -> Tuple[List[np.ndarray[int]], List[np.ndarray[float]]]:
+    ) -> Tuple[List[npt.NDArray[np.int]], List[npt.NDArray[np.float32]]]:
         """
         Perform batch range query for provided list of query vectors.
         """
