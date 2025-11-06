@@ -49,9 +49,15 @@ namespace HNSWIndex
         public Func<NodeDistance<TDistance>[], Func<int, int, TDistance>, int, List<int>> Heuristic { get; set; } = Heuristic<TDistance>.DefaultHeuristic;
 
         /// <summary>
-        /// Indicates if all points are guaranteed
+        /// Indicates if all points are guaranteed at the bottom layer (layer 0) or should their creation be randomized.
         /// </summary>
         [ProtoMember(8)]
         public bool ZeroLayerGuaranteed = true;
+
+        /// <summary>
+        /// Indicates if removals are allowed in the index. Setting this to false improves parallelization performance.
+        /// </summary>
+        [ProtoMember(9)]
+        public bool AllowRemovals = true;
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Numerics;
 using ProtoBuf;
 
@@ -16,7 +17,7 @@ namespace HNSWIndex
         internal NestedArrayWrapper<TLabel>[]? Items { get; set; }
 
         [ProtoMember(3)]
-        internal Queue<int>? RemovedIndexes { get; set; }
+        internal ConcurrentQueue<int>? RemovedIndexes { get; set; }
 
         [ProtoMember(4)]
         internal int EntryPointId = -1;

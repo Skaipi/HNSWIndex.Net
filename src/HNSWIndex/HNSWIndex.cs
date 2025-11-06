@@ -59,11 +59,7 @@ namespace HNSWIndex
         {
             if (!initialized) initialized = true;
 
-            var itemId = -1;
-            lock (data.indexLock)
-            {
-                itemId = data.AddItem(item);
-            }
+            var itemId = data.AddItem(item);
             if (itemId == -1) return itemId;
 
             lock (data.Nodes[itemId].OutEdgesLock)
@@ -91,6 +87,8 @@ namespace HNSWIndex
         /// </summary>
         public void Remove(int itemIndex)
         {
+            if (parameters.AllowRemovals == false)
+                throw new InvalidOperationException("Removals are disabled in this index instance.");
             var item = data.Nodes[itemIndex];
             connector.RemoveNodeConnections(item);
         }
@@ -111,6 +109,8 @@ namespace HNSWIndex
         /// </summary>
         public void Update(IList<int> indexes, IList<TLabel> labels)
         {
+            if (parameters.AllowRemovals == false)
+                throw new InvalidOperationException("Removals and updates are disabled in this index instance.");
             connector.UpdateOldConnections(indexes, labels);
         }
 

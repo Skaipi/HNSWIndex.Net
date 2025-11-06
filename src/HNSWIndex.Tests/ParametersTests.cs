@@ -85,6 +85,29 @@
             Assert.IsTrue(recall < 0.50);
         }
 
+        [TestMethod]
+        public void TestParameterAllowRemovals()
+        {
+            Assert.IsNotNull(vectors);
+
+            var parameters = new HNSWParameters<float> { AllowRemovals = false };
+            var index = new HNSWIndex<float[], float>(Metrics.SquaredEuclideanMetric.Compute, parameters);
+
+            index.Add(vectors);
+
+            var recall = Utils.Recall(index, vectors, vectors);
+            Assert.IsTrue(recall > 0.9);
+
+            var info = index.GetInfo();
+            foreach (var layer in info.Layers)
+            {
+                Assert.IsTrue(layer.MaxInEdges == 0);
+            }
+
+            Assert.ThrowsException<InvalidOperationException>(() => index.Remove(0));
+            Assert.ThrowsException<InvalidOperationException>(() => index.Update(new List<int> { 0 }, new List<float[]> { vectors[1] }));
+        }
+
         public static List<int> BruteForceHeuristic(NodeDistance<float>[] candidates, Func<int, int, float> distanceFnc, int maxEdges)
         {
             return candidates.OrderBy(x => x.Dist).Take(maxEdges).ToList().ConvertAll(x => x.Id);

@@ -1,10 +1,12 @@
-﻿namespace HNSWIndex
+﻿using System.Collections.Concurrent;
+
+namespace HNSWIndex
 {
     public class HNSWInfo
     {
         public List<LayerInfo> Layers;
 
-        internal HNSWInfo(Node[] nodes, Queue<int> removedNodes, int maxLayer)
+        internal HNSWInfo(Node[] nodes, ConcurrentQueue<int> removedNodes, int maxLayer)
         {
             Layers = new List<LayerInfo>(maxLayer + 1);
             for (int layer = 0; layer <= maxLayer; layer++)

@@ -270,7 +270,7 @@ namespace HNSWIndex
             var bestNeighboursIds = parameters.Heuristic(topCandidates, data.Distance, data.MaxEdges(layer));
             // lock is already acquired
             currNode.OutEdges[layer] = bestNeighboursIds;
-            currNode.InEdges[layer].AddRange(bestNeighboursIds);
+            if (parameters.AllowRemovals == true) currNode.InEdges[layer].AddRange(bestNeighboursIds);
 
             for (int i = 0; i < bestNeighboursIds.Count; ++i)
             {
@@ -278,7 +278,7 @@ namespace HNSWIndex
                 var neighbor = data.Nodes[newNeighbourId];
                 lock (neighbor.OutEdgesLock)
                 {
-                    neighbor.InEdges[layer].Add(currNode.Id);
+                    if (parameters.AllowRemovals == true) neighbor.InEdges[layer].Add(currNode.Id);
                     neighbor.OutEdges[layer].Add(currNode.Id);
                 }
 
@@ -335,6 +335,9 @@ namespace HNSWIndex
             }
 
             node.OutEdges[layer] = newOut;
+
+            // NOTE: reverse edges and, hence, InLocks are needed only if removals happen. They may impose serious parrallelization bottleneck.
+            if (parameters.AllowRemovals == false) return;
 
             for (int i = 0; i < removedCount; i++)
             {

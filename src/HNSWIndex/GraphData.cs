@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System.Collections.Concurrent;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace HNSWIndex
@@ -20,7 +21,7 @@ namespace HNSWIndex
 
         private object removedIndexesLock = new object();
 
-        internal Queue<int> RemovedIndexes { get; private set; }
+        internal ConcurrentQueue<int> RemovedIndexes { get; private set; }
 
 
         internal GraphRegionLocker GraphLocker;
@@ -47,6 +48,8 @@ namespace HNSWIndex
 
         private bool zeroLayerGuaranteed;
 
+        private bool allowRemovals;
+
         private Func<TLabel, TLabel, TDistance> distanceFnc;
 
         /// <summary>
@@ -59,9 +62,10 @@ namespace HNSWIndex
             distRate = parameters.DistributionRate;
             maxEdges = parameters.MaxEdges;
             zeroLayerGuaranteed = parameters.ZeroLayerGuaranteed;
+            allowRemovals = parameters.AllowRemovals;
             Capacity = parameters.CollectionSize;
 
-            RemovedIndexes = new Queue<int>();
+            RemovedIndexes = new ConcurrentQueue<int>();
             Nodes = new Node[parameters.CollectionSize];
             Items = new TLabel[parameters.CollectionSize];
             GraphLocker = new GraphRegionLocker(parameters.CollectionSize);
@@ -77,11 +81,12 @@ namespace HNSWIndex
             distRate = parameters.DistributionRate;
             maxEdges = parameters.MaxEdges;
             zeroLayerGuaranteed = parameters.ZeroLayerGuaranteed;
+            allowRemovals = parameters.AllowRemovals;
 
             Nodes = snapshot.ParsedNodes ?? new Node[parameters.CollectionSize];
             Items = snapshot.ParsedItems ?? new TLabel[parameters.CollectionSize];
             GraphLocker = new GraphRegionLocker(snapshot.Capacity);
-            RemovedIndexes = snapshot.RemovedIndexes ?? new Queue<int>();
+            RemovedIndexes = snapshot.RemovedIndexes ?? new ConcurrentQueue<int>();
             EntryPointId = snapshot.EntryPointId;
             Capacity = snapshot.Capacity;
             Length = snapshot.Length;
@@ -98,40 +103,41 @@ namespace HNSWIndex
 
             // Search for empty spot first
             int vacantId = -1;
-            lock (removedIndexesLock)
+
+            if (allowRemovals == true && RemovedIndexes.Count > 0)
             {
-                if (RemovedIndexes.Count > 0)
-                {
-                    vacantId = RemovedIndexes.Dequeue();
-                }
+                RemovedIndexes.TryDequeue(out vacantId);
             }
 
             if (vacantId >= 0)
             {
                 Nodes[vacantId] = NewNode(vacantId, topLayer);
                 Items[vacantId] = item;
-                Count++;
+                Interlocked.Increment(ref Count);
                 return vacantId;
             }
 
             // Allocate new spot
-            vacantId = Length++;
+            vacantId = Interlocked.Increment(ref Length) - 1;
             Nodes[vacantId] = NewNode(vacantId, topLayer);
             Items[vacantId] = item;
-            if (Length >= Capacity)
+            lock (indexLock)
             {
-                Capacity *= 2;
-                var nodes = Nodes;
-                var items = Items;
-                Array.Resize(ref nodes, Capacity);
-                Array.Resize(ref items, Capacity);
-                Nodes = nodes;
-                Items = items;
-                // Update other structures
-                Reallocated?.Invoke(this, new ReallocateEventArgs(Capacity));
-                GraphLocker.UpdateCapacity(Capacity);
+                if (Length >= Capacity)
+                {
+                    Capacity *= 2;
+                    var nodes = Nodes;
+                    var items = Items;
+                    Array.Resize(ref nodes, Capacity);
+                    Array.Resize(ref items, Capacity);
+                    Nodes = nodes;
+                    Items = items;
+                    // Update other structures
+                    Reallocated?.Invoke(this, new ReallocateEventArgs(Capacity));
+                    GraphLocker.UpdateCapacity(Capacity);
+                }
             }
-            Count++;
+            Interlocked.Increment(ref Count);
             return vacantId;
         }
 
