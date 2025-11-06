@@ -1,4 +1,3 @@
-using System.Collections;
 using ProtoBuf;
 
 namespace HNSWIndex
