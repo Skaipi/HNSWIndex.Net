@@ -6,42 +6,89 @@
         [TestMethod]
         public void SquareEuclideanDistanceTest()
         {
-            var a = Utils.RandomVectors(100, 1)[0];
-            var b = Utils.RandomVectors(100, 1)[0];
-            
-            float epsilon = 1e-6f;
-            var result = Metrics.SquaredEuclideanMetric.Compute(a, b);
-            var reference = SquareEuclideanDistanceReference(a, b);
+            var a = Utils.RandomVectors(127, 1)[0];
+            var b = Utils.RandomVectors(127, 1)[0];
 
-            Assert.IsTrue(Math.Abs(result - reference) < epsilon);
+            float epsilon = 1e-6f;
+            var oddVectorsResult = Metrics.SquaredEuclideanMetric.Compute(a, b);
+            var oddVectorsReference = SquareEuclideanDistanceReference(a, b);
+
+            Assert.IsTrue(Math.Abs(oddVectorsResult - oddVectorsReference) < epsilon);
+
+            a = Utils.RandomVectors(128, 1)[0];
+            b = Utils.RandomVectors(128, 1)[0];
+
+            var alignedVectorsResult = Metrics.SquaredEuclideanMetric.Compute(a, b);
+            var alignedVectorsReference = SquareEuclideanDistanceReference(a, b);
+
+            Assert.IsTrue(Math.Abs(alignedVectorsResult - alignedVectorsReference) < epsilon);
+        }
+
+        [TestMethod]
+        public void EuclideanDistanceTest()
+        {
+            var a = Utils.RandomVectors(127, 1)[0];
+            var b = Utils.RandomVectors(127, 1)[0];
+
+            float epsilon = 1e-6f;
+            var oddVectorsResult = Metrics.EuclideanMetric.Compute(a, b);
+            var oddVectorsReference = EuclideanDistanceReference(a, b);
+
+            Assert.IsTrue(Math.Abs(oddVectorsResult - oddVectorsReference) < epsilon);
+
+            a = Utils.RandomVectors(128, 1)[0];
+            b = Utils.RandomVectors(128, 1)[0];
+
+            var alignedVectorsResult = Metrics.EuclideanMetric.Compute(a, b);
+            var alignedVectorsReference = EuclideanDistanceReference(a, b);
+
+            Assert.IsTrue(Math.Abs(alignedVectorsResult - alignedVectorsReference) < epsilon);
         }
 
         [TestMethod]
         public void CosineDistanceTest()
         {
-            var a = Utils.RandomVectors(100, 1)[0];
-            var b = Utils.RandomVectors(100, 1)[0];
-
+            var a = Utils.RandomVectors(127, 1)[0];
+            var b = Utils.RandomVectors(127, 1)[0];
             float epsilon = 1e-6f;
-            var result = Metrics.CosineMetric.Compute(a, b);
-            var reference = CosineDistanceReference(a, b);
 
-            Assert.IsTrue(Math.Abs(result - reference) < epsilon);
+            var oddVectorsResult = Metrics.CosineMetric.Compute(a, b);
+            var oddVectorsReference = CosineDistanceReference(a, b);
+
+            Assert.IsTrue(Math.Abs(oddVectorsResult - oddVectorsReference) < epsilon);
+
+            a = Utils.RandomVectors(128, 1)[0];
+            b = Utils.RandomVectors(128, 1)[0];
+
+            var alignedVectorsResult = Metrics.CosineMetric.Compute(a, b);
+            var alignedVectorsReference = CosineDistanceReference(a, b);
+
+            Assert.IsTrue(Math.Abs(alignedVectorsResult - alignedVectorsReference) < epsilon);
         }
 
         [TestMethod]
         public void UnitCosineDistanceTest()
         {
-            var a = Utils.RandomVectors(100, 1)[0];
-            var b = Utils.RandomVectors(100, 1)[0];
+            var a = Utils.RandomVectors(127, 1)[0];
+            var b = Utils.RandomVectors(127, 1)[0];
             Utils.Normalize(a);
             Utils.Normalize(b);
 
             float epsilon = 1e-6f;
-            var result = Metrics.CosineMetric.UnitCompute(a, b);
-            var reference = UnitCosineDistanceReference(a, b);
+            var oddVectorsResult = Metrics.CosineMetric.UnitCompute(a, b);
+            var oddVecorsReference = UnitCosineDistanceReference(a, b);
 
-            Assert.IsTrue(Math.Abs(result - reference) < epsilon);
+            Assert.IsTrue(Math.Abs(oddVectorsResult - oddVecorsReference) < epsilon);
+
+            a = Utils.RandomVectors(128, 1)[0];
+            b = Utils.RandomVectors(128, 1)[0];
+            Utils.Normalize(a);
+            Utils.Normalize(b);
+
+            var alignedVectorsResult = Metrics.CosineMetric.UnitCompute(a, b);
+            var alignedVectorsReference = UnitCosineDistanceReference(a, b);
+
+            Assert.IsTrue(Math.Abs(alignedVectorsResult - alignedVectorsReference) < epsilon);
         }
 
         public static float SquareEuclideanDistanceReference(float[] a, float[] b)
@@ -53,6 +100,11 @@
                 result += diff * diff;
             }
             return result;
+        }
+
+        public static float EuclideanDistanceReference(float[] a, float[] b)
+        {
+            return MathF.Sqrt(SquareEuclideanDistanceReference(a, b));
         }
 
         public static float CosineDistanceReference(float[] a, float[] b)
