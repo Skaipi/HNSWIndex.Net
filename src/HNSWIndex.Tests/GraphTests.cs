@@ -250,11 +250,11 @@
             Assert.IsTrue(recall < updateRecall + 0.05 * recall);
 
             // Ensure in and out edges are balanced
-            // var info = index.GetInfo();
-            // foreach (var layer in info.Layers)
-            // {
-            //     Assert.IsTrue(layer.AvgOutEdges == layer.AvgInEdges);
-            // }
+            var info = index.GetInfo();
+            foreach (var layer in info.Layers)
+            {
+                Assert.IsTrue(layer.AvgOutEdges == layer.AvgInEdges);
+            }
         }
     }
 }

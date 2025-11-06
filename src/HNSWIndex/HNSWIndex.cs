@@ -124,14 +124,6 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Directly access graph structure at given layer
-        /// </summary>
-        public GraphLayer GetGraphLayer(int layer)
-        {
-            return new GraphLayer(data.Nodes, layer);
-        }
-
-        /// <summary>
         /// Get K nearest neighbours of query point. 
         /// Optionally provide filter function to ignore certain labels.
         /// Layer parameters indicates at which layer search should be performed (0 - base layer)
