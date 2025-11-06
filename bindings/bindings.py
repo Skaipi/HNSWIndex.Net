@@ -216,7 +216,7 @@ class Index:
         if status < 0:
             raise RuntimeError(_last_error())
 
-    def add(self, vecs: npt.ArrayLike) -> npt.NDArray[np.int]:
+    def add(self, vecs: npt.ArrayLike) -> npt.NDArray[np.int32]:
         """
         Batch add vectors to hnsw index.
         Each vector should be represented as list of floating point values
@@ -254,7 +254,7 @@ class Index:
 
     def knn_query(
         self, queries: npt.ArrayLike, k: int
-    ) -> Tuple[npt.NDArray[np.integer], npt.NDArray[np.float32]]:
+    ) -> Tuple[npt.NDArray[np.int32], npt.NDArray[np.float32]]:
         """
         Perform batch knn query for provided list of query vectors.
         """
@@ -277,7 +277,7 @@ class Index:
 
     def range_query(
         self, queries: npt.ArrayLike, query_range: float
-    ) -> Tuple[List[npt.NDArray[np.int]], List[npt.NDArray[np.float32]]]:
+    ) -> Tuple[List[npt.NDArray[np.int32]], List[npt.NDArray[np.float32]]]:
         """
         Perform batch range query for provided list of query vectors.
         """
