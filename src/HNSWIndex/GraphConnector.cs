@@ -65,7 +65,6 @@ namespace HNSWIndex
         /// </summary>
         internal void RemoveNodeConnections(Node item)
         {
-            // TODO: Think about different method for handling side effects which have to be done under neighborhood lock.
             for (int layer = item.MaxLayer; layer >= 0; layer--)
             {
                 using (data.GraphLocker.LockNodeNeighbourhood(item, layer))
@@ -74,11 +73,7 @@ namespace HNSWIndex
                     if (item.Id == data.EntryPointId)
                     {
                         var replacementFound = data.TryReplaceEntryPoint(layer);
-                        if (!replacementFound && layer == 0)
-                        {
-                            // Take current removal into account
-                            data.EntryPointId = -1;
-                        }
+                        if (!replacementFound && layer == 0) data.EntryPointId = -1;
                     }
                     RemoveConnectionsAtLayer(item, layer);
                     if (layer == 0) data.RemoveItem(item.Id); // Remove label before leaving locks
@@ -300,21 +295,8 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Connect two nodes and handle overflow of edges.
+        /// Prune overflow of neighbors using heuristic function.
         /// </summary>
-        private void Connect(Node node, Node neighbour, int layer)
-        {
-            lock (node.OutEdgesLock)
-            {
-                node.OutEdges[layer].Add(neighbour.Id);
-                // Connections exceeded limit from parameters
-                if (node.OutEdges[layer].Count > data.MaxEdges(layer))
-                {
-                    PruneOverflow(node, layer);
-                }
-            }
-        }
-
         private void PruneOverflow(Node node, int layer)
         {
             int removedCount = 0;
@@ -408,17 +390,6 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Clear nodes adjacency list across all layers.
-        /// </summary>
-        internal void ResetNodeConnections(Node node)
-        {
-            for (int layer = node.MaxLayer; layer >= 0; layer--)
-            {
-                ResetNodeConnectionsAtLayer(node, layer);
-            }
-        }
-
-        /// <summary>
         /// Clear node adjacencty list at specified layer.
         /// </summary>
         internal void ResetNodeConnectionsAtLayer(Node node, int layer)
@@ -432,32 +403,10 @@ namespace HNSWIndex
         /// </summary>
         private void WipeRelationsWithNode(Node node, int layer)
         {
-            lock (node.OutEdgesLock)
+            // This is done in removal context. Locks are already acquired
+            foreach (var neighbourId in node.OutEdges[layer])
             {
-                foreach (var neighbourId in node.OutEdges[layer])
-                {
-                    lock (data.Nodes[neighbourId].InEdgesLock)
-                    {
-                        data.Nodes[neighbourId].InEdges[layer].Remove(node.Id);
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Set incoming edges to node based on its adjacency list.
-        /// </summary>
-        private void SetRelationsWithNode(Node node, int layer)
-        {
-            lock (node.OutEdgesLock)
-            {
-                foreach (var neighbourId in node.OutEdges[layer])
-                {
-                    lock (data.Nodes[neighbourId].InEdgesLock)
-                    {
-                        data.Nodes[neighbourId].InEdges[layer].Add(node.Id);
-                    }
-                }
+                data.Nodes[neighbourId].InEdges[layer].Remove(node.Id);
             }
         }
     }
