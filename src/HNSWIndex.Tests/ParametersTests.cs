@@ -105,7 +105,6 @@
             }
 
             Assert.ThrowsException<InvalidOperationException>(() => index.Remove(0));
-            Assert.ThrowsException<InvalidOperationException>(() => index.Update(new List<int> { 0 }, new List<float[]> { vectors[1] }));
         }
 
         public static List<int> BruteForceHeuristic(NodeDistance<float>[] candidates, Func<int, int, float> distanceFnc, int maxEdges)

@@ -105,16 +105,6 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Update items at given indexes with new labels 
-        /// </summary>
-        public void Update(IList<int> indexes, IList<TLabel> labels)
-        {
-            if (parameters.AllowRemovals == false)
-                throw new InvalidOperationException("Removals and updates are disabled in this index instance.");
-            connector.UpdateOldConnections(indexes, labels);
-        }
-
-        /// <summary>
         /// Get list of items inserted into the graph structure
         /// </summary>
         public List<TLabel> Items()

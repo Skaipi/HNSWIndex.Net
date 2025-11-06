@@ -226,35 +226,5 @@
                 Assert.IsTrue(layer.AvgOutEdges == layer.AvgInEdges);
             }
         }
-
-        [TestMethod]
-        public void UpdateNodesTest()
-        {
-            Assert.IsNotNull(vectors);
-
-            var dim = vectors[0].Length;
-            var newVectors = Utils.RandomVectors(dim, vectors.Count);
-            var indexes = new List<int>(vectors.Count);
-            var index = new HNSWIndex<float[], float>(Metrics.SquaredEuclideanMetric.Compute);
-            for (int i = 0; i < vectors.Count; i++)
-            {
-                Utils.Normalize(vectors[i]);
-                indexes.Add(index.Add(vectors[i]));
-            }
-
-            var recall = Utils.Recall(index, vectors, vectors);
-
-            index.Update(indexes, newVectors);
-
-            var updateRecall = Utils.Recall(index, newVectors, newVectors);
-            Assert.IsTrue(recall < updateRecall + 0.05 * recall);
-
-            // Ensure in and out edges are balanced
-            var info = index.GetInfo();
-            foreach (var layer in info.Layers)
-            {
-                Assert.IsTrue(layer.AvgOutEdges == layer.AvgInEdges);
-            }
-        }
     }
 }

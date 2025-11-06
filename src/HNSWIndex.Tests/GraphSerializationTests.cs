@@ -27,7 +27,7 @@ namespace HNSWIndex.Tests
             try
             {
                 index.Serialize(path);
-                var decodedIndex = HNSWIndex<float[], float>.Deserialize(Metrics.SquaredEuclideanMetric.Compute, "GraphData.bin");
+                var decodedIndex = HNSWIndex<float[], float>.Deserialize(Metrics.SquaredEuclideanMetric.Compute, path);
 
                 for (int i = 0; i < vectors.Count; i++)
                 {

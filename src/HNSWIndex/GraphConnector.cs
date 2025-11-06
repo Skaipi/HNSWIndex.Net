@@ -49,17 +49,6 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Perform update of connections on provided list of indexes 
-        /// </summary>
-        internal void UpdateOldConnections(IList<int> indexes, IList<TLabel> labels)
-        {
-            if (indexes.Count != labels.Count) throw new ArgumentException("Update collections size mismatch");
-
-            var dirtyByIndex = DisconnectDirtyEdges(indexes, labels);
-            ReconnectDirtyNodes(dirtyByIndex);
-        }
-
-        /// <summary>
         /// Remove node from the graph at all layers.
         /// After this operation no other node in graph will point to provided item.
         /// </summary>
@@ -140,110 +129,6 @@ namespace HNSWIndex
             target.OutEdges[layer].Remove(badNeighbour.Id);
         }
 
-
-        /// <summary>
-        /// Mark edges with outdated neighborhood as dirty and disconnect them from the graph.
-        /// Return dictionary with ids of dirty nodes valued by ditry level.
-        /// </summary>
-        private ConcurrentDictionary<int, int> DisconnectDirtyEdges(IList<int> indexes, IList<TLabel> labels)
-        {
-            // index -> highest layer that needs reinsertion, -1 means clean
-            var dirtyByIndex = new ConcurrentDictionary<int, int>(Environment.ProcessorCount * 2, indexes.Count);
-            var cleanAnchors = new int[data.GetTopLayer() + 1];
-            Array.Fill(cleanAnchors, data.EntryPointId);
-
-            // Decide which layers to rewire and temporarily disconnect at those layers
-            Parallel.For(0, indexes.Count, (i) =>
-            {
-                var index = indexes[i];
-                var newLabel = labels[i];
-                var oldLabel = data.Items[index];
-                var difference = data.Distance(newLabel, oldLabel);
-                var node = data.Nodes[index];
-
-                if (TDistance.IsZero(difference)) return;
-
-                for (int layer = 0; layer <= node.MaxLayer; layer++)
-                {
-                    // Update on significant difference 
-                    using (data.GraphLocker.LockNodeNeighbourhood(node, layer))
-                    {
-                        var outs = node.OutEdges[layer];
-                        var isDirtyAlready = dirtyByIndex.ContainsKey(index);
-                        if (outs.Count == 0) return; // Most likely single point at layer
-
-                        // TODO: Replace linq call with manual min finding
-                        var minEdge = outs.Count > 0 ? outs.Min(neighbor => data.Distance(index, neighbor)) : TDistance.MaxValue;
-                        if (difference < minEdge) return; // Skip layer w/o significant change
-
-                        dirtyByIndex[index] = layer;
-
-                        // Move ep if change would invalid its status
-                        // TODO: Replace linq call with manual maxby finding
-                        if (index == cleanAnchors[layer])
-                        {
-                            cleanAnchors[layer] = outs.Count > 0 ? outs.MaxBy(id => data.Nodes[id].OutEdges[layer].Count) : -1;
-                        }
-                        RemoveConnectionsAtLayer(node, layer);
-                        ResetNodeConnectionsAtLayer(node, layer);
-                    }
-                }
-                // swap the label
-                data.Items[index] = newLabel;
-            });
-
-            // Resotore good ep
-            if (dirtyByIndex.GetValueOrDefault(data.EntryPointId, -1) >= 0)
-            {
-                for (int layer = dirtyByIndex[data.EntryPointId]; layer >= 0; layer--)
-                {
-                    var restorationEntry = data.Nodes[cleanAnchors[layer]];
-                    ConnectAtLayer(data.EntryPoint, restorationEntry, layer);
-                }
-                dirtyByIndex[data.EntryPointId] = -1;
-            }
-
-            return dirtyByIndex;
-        }
-
-        /// <summary>
-        /// Reestablish connections from dirty nodes.
-        /// </summary>
-        private void ReconnectDirtyNodes(ConcurrentDictionary<int, int> dirtyByIndex)
-        {
-            Parallel.ForEach(dirtyByIndex, (kvp) =>
-            {
-                var index = kvp.Key;
-                var topLayer = kvp.Value;
-                var node = data.Nodes[index];
-                if (topLayer < 0) return;
-
-                // Perform reconnect
-                lock (node.OutEdgesLock)
-                {
-                    // Select best peer which has connections at rebuild layer
-                    Func<int, int, bool> EntryFilter = (cand, layer) => cand != index && dirtyByIndex.GetValueOrDefault(cand, -1) < layer;
-                    var bestPeer = navigator.FindEntryPoint(topLayer, data.Items[index], cand => EntryFilter(cand, topLayer));
-                    for (int layer = topLayer; layer >= 0; layer--)
-                    {
-                        if (!EntryFilter(bestPeer.Id, layer)) throw new InvalidOperationException("Dirty entry point while reconnecting");
-                        if (layer > 0)
-                        {
-                            var nextLayer = layer - 1;
-                            var nextEntryCandidateId = ConnectAtLayer(node, bestPeer, layer, cand => EntryFilter(cand, nextLayer));
-                            bestPeer = nextEntryCandidateId >= 0 ? data.Nodes[nextEntryCandidateId] : data.EntryPoint;
-                        }
-                        else ConnectAtLayer(node, bestPeer, layer);
-
-                        // update status
-                        dirtyByIndex.TryGetValue(index, out var a);
-                        dirtyByIndex.TryUpdate(index, a - 1, a);
-                    }
-                    dirtyByIndex.TryUpdate(index, -1, 0);
-                }
-            });
-        }
-
         /// <summary>
         /// Establish connections to node.
         /// </summary>
@@ -262,15 +147,13 @@ namespace HNSWIndex
         /// Establish connections to node at given layer and return best peer.
         /// Optionally, provide filter function to discriminate certain solutions from ep status.
         /// </summary>
-        internal int ConnectAtLayer(Node currNode, Node bestPeer, int layer, Func<int, bool>? filterFnc = null)
+        internal int ConnectAtLayer(Node currNode, Node bestPeer, int layer)
         {
-            filterFnc ??= noFilter;
-
             var topCandidates = navigator.SearchLayer(bestPeer.Id, layer, parameters.MaxCandidates, data.Items[currNode.Id]);
             var bestNeighboursIds = parameters.Heuristic(topCandidates, data.Distance, data.MaxEdges(layer));
             // lock is already acquired
             currNode.OutEdges[layer] = bestNeighboursIds;
-            if (parameters.AllowRemovals == true) currNode.InEdges[layer].AddRange(bestNeighboursIds);
+            if (parameters.AllowRemovals) currNode.InEdges[layer].AddRange(bestNeighboursIds);
 
             for (int i = 0; i < bestNeighboursIds.Count; ++i)
             {
@@ -278,20 +161,17 @@ namespace HNSWIndex
                 var neighbor = data.Nodes[newNeighbourId];
                 lock (neighbor.OutEdgesLock)
                 {
-                    if (parameters.AllowRemovals == true) neighbor.InEdges[layer].Add(currNode.Id);
+                    if (parameters.AllowRemovals) neighbor.InEdges[layer].Add(currNode.Id);
                     neighbor.OutEdges[layer].Add(currNode.Id);
-                }
 
-                if (neighbor.OutEdges[layer].Count > data.MaxEdges(layer))
-                {
-                    lock (neighbor.OutEdgesLock)
+                    if (neighbor.OutEdges[layer].Count > data.MaxEdges(layer))
                     {
                         PruneOverflow(neighbor, layer);
                     }
                 }
             }
 
-            return bestNeighboursIds.Where(filterFnc).FirstOrDefault(-1);
+            return bestNeighboursIds[0];
         }
 
         /// <summary>
@@ -374,31 +254,6 @@ namespace HNSWIndex
             var span = CollectionsMarshal.AsSpan(list);
             for (int i = 0; i < span.Length; i++) if (span[i] == value) return i;
             return -1;
-        }
-
-        /// <summary>
-        /// Handle overflow of neighbors using heuristic function.
-        /// </summary>
-        private void RecomputeConnections(Node node, List<int> candidates, int layer)
-        {
-            var candidatesDistances = new NodeDistance<TDistance>[candidates.Count];
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                int neighborId = candidates[i];
-                candidatesDistances[i] = new NodeDistance<TDistance>(neighborId, data.Distance(neighborId, node.Id));
-            }
-
-            var newNeighbours = parameters.Heuristic(candidatesDistances, data.Distance, data.MaxEdges(layer));
-            node.OutEdges[layer] = newNeighbours;
-        }
-
-        /// <summary>
-        /// Clear node adjacencty list at specified layer.
-        /// </summary>
-        internal void ResetNodeConnectionsAtLayer(Node node, int layer)
-        {
-            node.OutEdges[layer] = new List<int>(data.MaxEdges(layer) + 1);
-            node.InEdges[layer] = new List<int>(data.MaxEdges(layer) + 1);
         }
 
         /// <summary>
