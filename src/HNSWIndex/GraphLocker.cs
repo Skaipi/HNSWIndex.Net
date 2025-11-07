@@ -78,11 +78,11 @@ namespace HNSWIndex
         {
             try
             {
-                var outs = node.OutEdges[layer];
-                var ins = node.InEdges[layer];
+                var outs = node.OutEdges[layer].AsSpan();
+                var ins = node.InEdges[layer].AsSpan();
 
                 // Build [node] + outs + ins
-                var result = new int[1 + outs.Count + ins.Count];
+                var result = new int[1 + outs.Length + ins.Length];
                 int k = 0;
                 result[k++] = node.Id;
                 foreach (var o in outs) result[k++] = o;

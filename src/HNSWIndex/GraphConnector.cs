@@ -1,7 +1,4 @@
-﻿using System.Collections.Concurrent;
-using System.Numerics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
+﻿using System.Numerics;
 
 namespace HNSWIndex
 {
@@ -77,17 +74,17 @@ namespace HNSWIndex
         {
             WipeRelationsWithNode(removedNode, layer);
 
-            var candidates = removedNode.OutEdges[layer];
+            var candidates = removedNode.OutEdges[layer].AsSpan();
             for (int i = 0; i < removedNode.InEdges[layer].Count; i++)
             {
-                var activeNodeId = removedNode.InEdges[layer][i];
+                var activeNodeId = removedNode.InEdges[layer].AsSpan()[i];
                 var activeNode = data.Nodes[activeNodeId];
-                var activeNeighbours = activeNode.OutEdges[layer];
+                var activeNeighbours = activeNode.OutEdges[layer].AsSpan();
                 RemoveOutEdge(activeNode, removedNode, layer);
 
                 // Select candidates for active node
                 var localCandidates = new List<NodeDistance<TDistance>>();
-                for (int j = 0; j < candidates.Count; j++)
+                for (int j = 0; j < candidates.Length; j++)
                 {
                     var candidateId = candidates[j];
                     if (candidateId == activeNodeId || activeNeighbours.Contains(candidateId))
@@ -98,14 +95,14 @@ namespace HNSWIndex
 
                 //TODO: Maybe use heuristic fuction here
                 localCandidates.Sort(Heuristic<TDistance>.CloserFirst);
-                for (int j = 0; j < localCandidates.Count && activeNeighbours.Count < data.MaxEdges(layer); j++)
+                for (int j = 0; j < localCandidates.Count && activeNeighbours.Length < data.MaxEdges(layer); j++)
                 {
                     var candidate = localCandidates[j];
                     var candidateId = candidate.Id;
                     var candidateDist = candidate.Dist;
 
                     bool acceptable = true;
-                    for (int n = 0; n < activeNeighbours.Count; n++)
+                    for (int n = 0; n < activeNeighbours.Length; n++)
                     {
                         var neighborId = activeNeighbours[n];
                         if (data.Distance(neighborId, candidateId) < candidateDist) { acceptable = false; break; }
@@ -153,11 +150,13 @@ namespace HNSWIndex
             var bestNeighboursIds = parameters.Heuristic(topCandidates, data.Distance, data.MaxEdges(layer));
             // lock is already acquired
             currNode.OutEdges[layer] = bestNeighboursIds;
-            if (parameters.AllowRemovals) currNode.InEdges[layer].AddRange(bestNeighboursIds);
+            lock (currNode.InEdgesLock)
+                if (parameters.AllowRemovals) currNode.InEdges[layer] = new EdgeList(bestNeighboursIds);
 
+            var bestNeighboursIdsSpan = bestNeighboursIds.AsSpan();
             for (int i = 0; i < bestNeighboursIds.Count; ++i)
             {
-                int newNeighbourId = bestNeighboursIds[i];
+                int newNeighbourId = bestNeighboursIdsSpan[i];
                 var neighbor = data.Nodes[newNeighbourId];
                 lock (neighbor.OutEdgesLock)
                 {
@@ -171,7 +170,7 @@ namespace HNSWIndex
                 }
             }
 
-            return bestNeighboursIds[0];
+            return bestNeighboursIdsSpan[0];
         }
 
         /// <summary>
@@ -181,18 +180,20 @@ namespace HNSWIndex
         {
             int removedCount = 0;
             int addedCount = 0;
-            List<int> oldOut;
-            List<int> newOut;
+            EdgeList oldOut;
+            EdgeList newOut;
+            var oldOutSpan = node.OutEdges[layer].AsSpan();
 
             oldOut = node.OutEdges[layer];
-            var candidates = oldOut;
-            var candidatesDistances = new NodeDistance<TDistance>[candidates.Count];
-            for (int i = 0; i < candidates.Count; i++)
+            var candidates = oldOut.AsSpan();
+            var candidatesDistances = new NodeDistance<TDistance>[candidates.Length];
+            for (int i = 0; i < candidates.Length; i++)
             {
                 int cand = candidates[i];
                 candidatesDistances[i] = new NodeDistance<TDistance>(cand, data.Distance(cand, node.Id));
             }
             newOut = parameters.Heuristic(candidatesDistances, data.Distance, data.MaxEdges(layer));
+            var newOutSpan = newOut.AsSpan();
 
             int commonLen = oldOut.Count;
             Span<int> removed = commonLen <= 128 ? stackalloc int[commonLen] : new int[commonLen];
@@ -200,17 +201,17 @@ namespace HNSWIndex
 
             for (int i = 0; i < oldOut.Count; i++)
             {
-                int id = oldOut[i];
+                int id = oldOutSpan[i];
                 bool keep = false;
-                for (int j = 0; j < newOut.Count; j++) { if (newOut[j] == id) { keep = true; break; } }
+                for (int j = 0; j < newOut.Count; j++) { if (newOutSpan[j] == id) { keep = true; break; } }
                 if (!keep) removed[removedCount++] = id;
             }
 
             for (int i = 0; i < newOut.Count; i++)
             {
-                int id = newOut[i];
+                int id = newOutSpan[i];
                 bool existed = false;
-                for (int j = 0; j < oldOut.Count; j++) { if (oldOut[j] == id) { existed = true; break; } }
+                for (int j = 0; j < oldOut.Count; j++) { if (oldOutSpan[j] == id) { existed = true; break; } }
                 if (!existed) added[addedCount++] = id;
             }
 
@@ -225,14 +226,7 @@ namespace HNSWIndex
                 var nb = data.Nodes[rid];
                 lock (nb.InEdgesLock)
                 {
-                    var inList = nb.InEdges[layer];
-                    int idx = IndexOf(inList, node.Id);
-                    if (idx >= 0)
-                    {
-                        int last = inList.Count - 1;
-                        inList[idx] = inList[last];
-                        inList.RemoveAt(last);
-                    }
+                    nb.InEdges[layer].Remove(node.Id);
                 }
             }
 
@@ -247,24 +241,17 @@ namespace HNSWIndex
             }
         }
 
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int IndexOf(List<int> list, int value)
-        {
-            var span = CollectionsMarshal.AsSpan(list);
-            for (int i = 0; i < span.Length; i++) if (span[i] == value) return i;
-            return -1;
-        }
-
         /// <summary>
         /// Forget node as neighbor by incomming edge.
         /// </summary>
         private void WipeRelationsWithNode(Node node, int layer)
         {
             // This is done in removal context. Locks are already acquired
-            foreach (var neighbourId in node.OutEdges[layer])
+            var edgesSpan = node.OutEdges[layer].AsSpan();
+            for (int i = 0; i < edgesSpan.Length; i++)
             {
-                data.Nodes[neighbourId].InEdges[layer].Remove(node.Id);
+                var neighborId = edgesSpan[i];
+                data.Nodes[neighborId].InEdges[layer].Remove(node.Id);
             }
         }
     }

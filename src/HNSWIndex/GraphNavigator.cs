@@ -49,10 +49,9 @@ namespace HNSWIndex
             while (changed)
             {
                 changed = false;
-                List<int> connections = bestPeerCandidate.OutEdges[layer];
-                int size = connections.Count;
+                var connections = bestPeerCandidate.OutEdges[layer].AsSpan();
 
-                for (int i = 0; i < size; i++)
+                for (int i = 0; i < connections.Length; i++)
                 {
                     int candidateId = connections[i];
                     var d = data.Distance(candidateId, query);
@@ -103,9 +102,9 @@ namespace HNSWIndex
                 }
                 candidates.Pop(); // Delay heap reordering in case of early break 
 
-                var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer];
+                var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer].AsSpan();
 
-                for (int i = 0; i < neighboursIds.Count; ++i)
+                for (int i = 0; i < neighboursIds.Length; ++i)
                 {
                     int neighbourId = neighboursIds[i];
                     if (visitedList.Contains(neighbourId)) continue;
@@ -169,9 +168,9 @@ namespace HNSWIndex
                 }
                 candidates.Pop(); // Delay heap reordering in case of early break 
 
-                var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer];
+                var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer].AsSpan();
 
-                for (int i = 0; i < neighboursIds.Count; ++i)
+                for (int i = 0; i < neighboursIds.Length; ++i)
                 {
                     int neighbourId = neighboursIds[i];
                     if (visitedList.Contains(neighbourId)) continue;

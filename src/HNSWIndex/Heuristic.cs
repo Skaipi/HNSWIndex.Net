@@ -7,18 +7,19 @@ namespace HNSWIndex
         internal static DistanceComparer<TDistance> FartherFirst = new DistanceComparer<TDistance>();
         internal static ReverseDistanceComparer<TDistance> CloserFirst = new ReverseDistanceComparer<TDistance>();
 
-        internal static List<int> DefaultHeuristic(NodeDistance<TDistance>[] candidates, Func<int, int, TDistance> distanceFnc, int maxEdges)
+        internal static EdgeList DefaultHeuristic(NodeDistance<TDistance>[] candidates, Func<int, int, TDistance> distanceFnc, int maxEdges)
         {
             if (candidates.Length < maxEdges)
             {
-                var ids = new List<int>(candidates.Length);
+                var ids = new EdgeList(candidates.Length);
                 for (int i = 0; i < candidates.Length; i++) ids.Add(candidates[i].Id);
                 return ids;
             }
 
-            var resultList = new List<NodeDistance<TDistance>>(maxEdges + 1);
+            var resultCount = 0;
+            var resultList = new NodeDistance<TDistance>[maxEdges + 1];
             Array.Sort(candidates, FartherFirst); // FarherFirst applies to heap ordering not sorting
-            for (int i = 0; i < candidates.Length && resultList.Count < maxEdges; i++)
+            for (int i = 0; i < candidates.Length && resultCount < maxEdges; i++)
             {
                 // Make local copy to maybe improve performance
                 var candidate = candidates[i];
@@ -26,17 +27,20 @@ namespace HNSWIndex
                 var candidateDist = candidate.Dist;
 
                 bool acceptable = true;
-                for (int j = 0; j < resultList.Count; j++)
+                for (int j = 0; j < resultCount; j++)
                 {
                     var s = resultList[j];
                     if (distanceFnc(s.Id, candidateId) < candidateDist) { acceptable = false; break; }
                 }
 
-                if (acceptable) resultList.Add(candidate);
+                if (acceptable)
+                {
+                    resultList[resultCount++] = candidate;
+                }
             }
 
-            var outIds = new List<int>(resultList.Count);
-            for (int k = 0; k < resultList.Count; k++) outIds.Add(resultList[k].Id);
+            var outIds = new EdgeList(maxEdges + 1);
+            for (int k = 0; k < resultCount; k++) outIds.Add(resultList[k].Id);
             return outIds;
         }
     }
