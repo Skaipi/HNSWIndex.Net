@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace HNSWIndex
 {
@@ -7,7 +8,8 @@ namespace HNSWIndex
         internal static DistanceComparer<TDistance> FartherFirst = new DistanceComparer<TDistance>();
         internal static ReverseDistanceComparer<TDistance> CloserFirst = new ReverseDistanceComparer<TDistance>();
 
-        internal static EdgeList DefaultHeuristic(NodeDistance<TDistance>[] candidates, Func<int, int, TDistance> distanceFnc, int maxEdges)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static EdgeList RelativeNeighborPruning(NodeDistance<TDistance>[] candidates, Func<int, int, TDistance> distanceFnc, int maxEdges)
         {
             if (candidates.Length < maxEdges)
             {

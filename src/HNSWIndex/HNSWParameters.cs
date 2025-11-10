@@ -46,7 +46,7 @@ namespace HNSWIndex
         /// Heuristic function for neighbour selection. This function takes a list of candidates, a distance function and a maximum number of edges to return.
         /// </summary>
         [ProtoMember(7)]
-        internal Func<NodeDistance<TDistance>[], Func<int, int, TDistance>, int, EdgeList> Heuristic { get; set; } = Heuristic<TDistance>.DefaultHeuristic;
+        internal Func<NodeDistance<TDistance>[], Func<int, int, TDistance>, int, EdgeList> Heuristic { get; set; } = Heuristic<TDistance>.RelativeNeighborPruning;
 
         /// <summary>
         /// Indicates if all points are guaranteed at the bottom layer (layer 0) or should their creation be randomized.
