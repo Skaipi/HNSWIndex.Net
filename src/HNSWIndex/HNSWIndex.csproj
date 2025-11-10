@@ -8,6 +8,8 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Optimize>true</Optimize>
+    <CheckForOverflowUnderflow>false</CheckForOverflowUnderflow>
     <PackageId>HNSWIndex</PackageId>
     <Title>HNSWIndex</Title>
     <Version>1.5.0</Version>

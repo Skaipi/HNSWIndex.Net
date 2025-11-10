@@ -243,4 +243,11 @@ public static unsafe class HNSWIndexExport
         try { _parameters.MinNN = minNN; return 0; }
         catch (Exception ex) { SetError(ex); return -1; }
     }
+
+    [UnmanagedCallersOnly(EntryPoint = "hnsw_set_allow_removals", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static int SetAllowRemovals(bool allowRemovals)
+    {
+        try { _parameters.AllowRemovals = allowRemovals; return 0; }
+        catch (Exception ex) { SetError(ex); return -1; }
+    }
 }

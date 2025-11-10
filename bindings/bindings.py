@@ -109,6 +109,9 @@ lib.hnsw_set_random_seed.argtypes = [ct.c_int]
 lib.hnsw_set_min_nn.restype = ct.c_int
 lib.hnsw_set_min_nn.argtypes = [ct.c_int]
 
+lib.hnsw_set_allow_removals.restype = ct.c_int
+lib.hnsw_set_allow_removals.argtypes = [ct.c_bool]
+
 lib.hnsw_get_last_error_utf8.restype = ct.c_int
 lib.hnsw_get_last_error_utf8.argtypes = [ct.c_void_p, ct.c_int]
 
@@ -213,6 +216,16 @@ class Index:
         All parameter setters will throw if used on initialized index.
         """
         status = lib.hnsw_set_min_nn(min_nn)
+        if status < 0:
+            raise RuntimeError(_last_error())
+
+    def set_allow_removals(self, allowRemovals: bool):
+        """
+        Set flag which enables removal from hnsw structure.
+        By default set to `True`.
+        Setting this to `False` may improve memory footprint and construction time.
+        """
+        status = lib.hnsw_set_allow_removals(allowRemovals)
         if status < 0:
             raise RuntimeError(_last_error())
 
