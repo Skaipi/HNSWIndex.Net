@@ -13,42 +13,21 @@ namespace HNSWIndex
 
         public object InEdgesLock { get; } = new();
 
+        [ProtoMember(2)]
         public EdgeList[] OutEdges = Array.Empty<EdgeList>();
 
+        [ProtoMember(3)]
         public EdgeList[] InEdges = Array.Empty<EdgeList>();
 
         public int MaxLayer => OutEdges.Length - 1;
-
-        // Trick to serialize lists of lists
-        [ProtoMember(2, Name = nameof(OutEdges))]
-        private NestedArrayWrapper<int[]>[] OutEdgesSerialized
-        {
-            get => OutEdges.Select(l => new NestedArrayWrapper<int[]>(l.AsSpan().ToArray())).ToArray();
-            // set => OutEdges = new NestedArrayWrapper<int[]>[0].Select(w => w.Values).ToList();
-        }
-
-        // Trick to serialize lists of lists
-        [ProtoMember(3, Name = nameof(InEdges))]
-        private NestedArrayWrapper<int[]>[] InEdgesSerialized
-        {
-            get => InEdges.Select(l => new NestedArrayWrapper<int[]>(l.AsSpan().ToArray())).ToArray();
-            // set => InEdges = new NestedArrayWrapper<int[]>[0].Select(w => w.Values).ToList();
-        }
-
-        [ProtoAfterDeserialization]
-        private void AfterDeserialization()
-        {
-            for (int i = 0; i <= MaxLayer; i++)
-            {
-                OutEdges[i] = new EdgeList(0);
-                InEdges[i] = new EdgeList(0);
-            }
-        }
     }
 
-    internal struct EdgeList
+    [ProtoContract]
+    public struct EdgeList
     {
+        [ProtoMember(1)]
         public int[] Buffer;
+        [ProtoMember(2)]
         public int Count;
 
         public EdgeList(int capacity)
@@ -62,6 +41,12 @@ namespace HNSWIndex
             Buffer = new int[other.Count];
             other.AsSpan().CopyTo(Buffer);
             Count = other.Count;
+        }
+
+        public EdgeList(IEnumerable<int> collection)
+        {
+            Buffer = collection.ToArray();
+            Count = Buffer.Length;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

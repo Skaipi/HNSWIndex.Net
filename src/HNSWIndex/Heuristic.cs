@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace HNSWIndex
 {
-    internal static class Heuristic<TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
+    public static class Heuristic<TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         internal static DistanceComparer<TDistance> FartherFirst = new DistanceComparer<TDistance>();
         internal static ReverseDistanceComparer<TDistance> CloserFirst = new ReverseDistanceComparer<TDistance>();

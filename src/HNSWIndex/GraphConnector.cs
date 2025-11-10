@@ -151,8 +151,7 @@ namespace HNSWIndex
             var bestNeighboursIds = Heuristic<TDistance>.RelativeNeighborPruning(topCandidates, data.Distance, data.MaxEdges(layer));
             // lock is already acquired
             currNode.OutEdges[layer] = bestNeighboursIds;
-            lock (currNode.InEdgesLock)
-                if (parameters.AllowRemovals) currNode.InEdges[layer] = new EdgeList(bestNeighboursIds);
+            if (parameters.AllowRemovals) currNode.InEdges[layer] = new EdgeList(bestNeighboursIds);
 
             var bestNeighboursIdsSpan = bestNeighboursIds.AsSpan();
             for (int i = 0; i < bestNeighboursIds.Count; ++i)
@@ -161,7 +160,11 @@ namespace HNSWIndex
                 var neighbor = data.Nodes[newNeighbourId];
                 lock (neighbor.OutEdgesLock)
                 {
-                    if (parameters.AllowRemovals) neighbor.InEdges[layer].Add(currNode.Id);
+                    if (parameters.AllowRemovals)
+                    {
+                        lock (neighbor.InEdgesLock) neighbor.InEdges[layer].Add(currNode.Id);
+                    }
+
                     neighbor.OutEdges[layer].Add(currNode.Id);
 
                     if (neighbor.OutEdges[layer].Count > data.MaxEdges(layer))

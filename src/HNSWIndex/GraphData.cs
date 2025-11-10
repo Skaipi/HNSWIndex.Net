@@ -14,40 +14,22 @@ namespace HNSWIndex
         internal event EventHandler<ReallocateEventArgs>? Reallocated;
 
         internal object indexLock = new object();
-
         internal Node[] Nodes { get; private set; }
-
         internal TLabel[] Items { get; private set; }
-
-        private object removedIndexesLock = new object();
-
         internal ConcurrentQueue<int> RemovedIndexes { get; private set; }
-
-
         internal GraphRegionLocker GraphLocker;
-
         internal object entryPointLock = new object();
-
         internal int EntryPointId = -1;
-
         internal Node EntryPoint => Nodes[EntryPointId];
-
         internal int Capacity;
-
         internal int Length = 0;
-
         internal int Count = 0;
-
+        private object rngLock = new object();
         private Random rng;
-
         private double distRate;
-
         private int maxEdges;
-
         private bool zeroLayerGuaranteed;
-
         private bool allowRemovals;
-
         private Func<TLabel, TLabel, TDistance> distanceFnc;
 
         /// <summary>
@@ -109,10 +91,11 @@ namespace HNSWIndex
             }
 
             // Allocate new spot
-            var len = Interlocked.Increment(ref Length);
+            int slotId;
             lock (indexLock)
             {
-                if (len >= Capacity)
+                slotId = Length++;
+                if (Length > Capacity)
                 {
                     Capacity *= 2;
                     var nodes = Nodes;
@@ -125,13 +108,12 @@ namespace HNSWIndex
                     Reallocated?.Invoke(this, new ReallocateEventArgs(Capacity));
                     GraphLocker.UpdateCapacity(Capacity);
                 }
-                vacantId = len - 1;
-                Nodes[vacantId] = NewNode(vacantId, topLayer);
-                Items[vacantId] = item;
+                Nodes[slotId] = NewNode(slotId, topLayer);
+                Items[slotId] = item;
             }
 
             Interlocked.Increment(ref Count);
-            return vacantId;
+            return slotId;
         }
 
         /// <summary>
@@ -141,11 +123,8 @@ namespace HNSWIndex
         internal void RemoveItem(int itemId)
         {
             Items[itemId] = default!;
-            lock (removedIndexesLock)
-            {
-                RemovedIndexes.Enqueue(itemId);
-                Count--;
-            }
+            RemovedIndexes.Enqueue(itemId);
+            Interlocked.Decrement(ref Count);
         }
 
         /// <summary>
@@ -168,7 +147,7 @@ namespace HNSWIndex
         {
             if (EntryPoint.OutEdges[layer].Count > 0)
             {
-                int neighbourId = -1;
+                int replacementId = -1;
                 int maxConnections = 0;
                 for (int i = 0; i < EntryPoint.OutEdges[layer].Count; i++)
                 {
@@ -177,10 +156,10 @@ namespace HNSWIndex
                     if (neighbor.OutEdges[layer].Count > maxConnections)
                     {
                         maxConnections = neighbor.OutEdges[layer].Count;
-                        neighbourId = neighborId;
+                        replacementId = neighborId;
                     }
                 }
-                EntryPointId = neighbourId;
+                EntryPointId = replacementId;
                 return true;
             }
             return false;
@@ -200,7 +179,11 @@ namespace HNSWIndex
         /// </summary>
         private int GetRandomLayer()
         {
-            float random = Random.Shared.NextSingle();
+            float random;
+            lock (rngLock)
+            {
+                random = rng.NextSingle();
+            }
             return zeroLayerGuaranteed ? (int)(-Math.Log(random) * distRate) : (int)(-Math.Log(random) * distRate) - 1;
         }
 
@@ -210,13 +193,13 @@ namespace HNSWIndex
         private Node NewNode(int index, int topLayer)
         {
             var outEdges = new EdgeList[topLayer + 1];
-            var inEdges = new EdgeList[topLayer + 1];
+            var inEdges = allowRemovals ? new EdgeList[topLayer + 1] : [];
 
             for (int layer = 0; layer <= topLayer; layer++)
             {
                 int maxEdges = MaxEdges(layer);
                 outEdges[layer] = new EdgeList(maxEdges + 1);
-                inEdges[layer] = new EdgeList(allowRemovals ? maxEdges + 1 : 0);
+                if (allowRemovals) inEdges[layer] = new EdgeList(allowRemovals ? maxEdges + 1 : 0);
             }
 
             return new Node

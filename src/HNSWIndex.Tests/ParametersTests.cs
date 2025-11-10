@@ -11,24 +11,24 @@
             vectors = Utils.RandomVectors(128, 1000);
         }
 
-        // [TestMethod]
-        // public void TestBruteForceHeuristic()
-        // {
-        //     Assert.IsNotNull(vectors);
+        [TestMethod]
+        public void TestBruteForceHeuristic()
+        {
+            Assert.IsNotNull(vectors);
 
-        //     var parameters = new HNSWParameters<float> { Heuristic = BruteForceHeuristic };
-        //     var index = new HNSWIndex<float[], float>(Metrics.CosineMetric.Compute, parameters);
+            var parameters = new HNSWParameters<float> { Heuristic = BruteForceHeuristic };
+            var index = new HNSWIndex<float[], float>(Metrics.CosineMetric.Compute, parameters);
 
-        //     for (int i = 0; i < vectors.Count; i++)
-        //     {
-        //         Utils.Normalize(vectors[i]);
-        //         index.Add(vectors[i]);
-        //     }
+            for (int i = 0; i < vectors.Count; i++)
+            {
+                Utils.Normalize(vectors[i]);
+                index.Add(vectors[i]);
+            }
 
-        //     var recall = Utils.Recall(index, vectors, vectors);
-        //     Console.WriteLine(recall);
-        //     Assert.IsTrue(recall > 0.90);
-        // }
+            var recall = Utils.Recall(index, vectors, vectors);
+            Console.WriteLine(recall);
+            Assert.IsTrue(recall > 0.90);
+        }
 
 
         [TestMethod]
@@ -107,9 +107,9 @@
             Assert.ThrowsException<InvalidOperationException>(() => index.Remove(0));
         }
 
-        public static List<int> BruteForceHeuristic(NodeDistance<float>[] candidates, Func<int, int, float> distanceFnc, int maxEdges)
+        public static EdgeList BruteForceHeuristic(NodeDistance<float>[] candidates, Func<int, int, float> distanceFnc, int maxEdges)
         {
-            return candidates.OrderBy(x => x.Dist).Take(maxEdges).ToList().ConvertAll(x => x.Id);
+            return new EdgeList(candidates.OrderBy(x => x.Dist).Take(maxEdges).ToList().ConvertAll(x => x.Id));
         }
     }
 }
