@@ -2,6 +2,7 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Runtime.CompilerServices;
 
     /// <summary>
     /// List of visited nodes. Every element of the list has associated unique version which describe when it was discovered.
@@ -12,6 +13,7 @@
         internal short[] Nodes;
         internal int Count => Nodes.Length;
 
+        [SkipLocalsInit]
         internal VisitedList(int numElements)
         {
             CurrVersion = 0;
@@ -21,6 +23,7 @@
         /// <summary>
         /// Marks node as visited in current version of the list.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void Add(int nodeId)
         {
             if ((uint)nodeId >= (uint)Nodes.Length) EnsureCapacity(nodeId + 1);
@@ -30,6 +33,7 @@
         /// <summary>
         /// Check if node has been visited.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal bool Contains(int nodeId)
         {
             if ((uint)nodeId >= (uint)Nodes.Length) return false; // nothing marked yet
