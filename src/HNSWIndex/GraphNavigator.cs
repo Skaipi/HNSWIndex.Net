@@ -15,7 +15,7 @@ namespace HNSWIndex
         internal GraphNavigator(GraphData<TLabel, TDistance> graphData)
         {
             data = graphData;
-            pool = new VisitedListPool(1, graphData.Capacity);
+            pool = new VisitedListPool(Environment.ProcessorCount, graphData.Capacity);
             fartherFirst = new DistanceComparer<TDistance>();
             closerFirst = new ReverseDistanceComparer<TDistance>();
         }

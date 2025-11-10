@@ -44,6 +44,12 @@ namespace HNSWIndex
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void Clear()
+        {
+            _count = 0;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal T Pop()
         {
             int jitCount = _count;

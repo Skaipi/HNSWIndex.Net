@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System.Buffers;
+using System.Numerics;
 
 namespace HNSWIndex
 {
@@ -147,7 +148,7 @@ namespace HNSWIndex
         internal int ConnectAtLayer(Node currNode, Node bestPeer, int layer)
         {
             var topCandidates = navigator.SearchLayer(bestPeer.Id, layer, parameters.MaxCandidates, data.Items[currNode.Id]);
-            var bestNeighboursIds = parameters.Heuristic(topCandidates, data.Distance, data.MaxEdges(layer));
+            var bestNeighboursIds = Heuristic<TDistance>.RelativeNeighborPruning(topCandidates, data.Distance, data.MaxEdges(layer));
             // lock is already acquired
             currNode.OutEdges[layer] = bestNeighboursIds;
             lock (currNode.InEdgesLock)
@@ -186,13 +187,19 @@ namespace HNSWIndex
 
             oldOut = node.OutEdges[layer];
             var candidates = oldOut.AsSpan();
-            var candidatesDistances = new NodeDistance<TDistance>[candidates.Length];
+            var candidatesDistances = ArrayPool<NodeDistance<TDistance>>.Shared.Rent(candidates.Length);
             for (int i = 0; i < candidates.Length; i++)
             {
                 int cand = candidates[i];
                 candidatesDistances[i] = new NodeDistance<TDistance>(cand, data.Distance(cand, node.Id));
             }
-            newOut = parameters.Heuristic(candidatesDistances, data.Distance, data.MaxEdges(layer));
+            newOut = Heuristic<TDistance>.RelativeNeighborPruning(candidatesDistances[0..candidates.Length], data.Distance, data.MaxEdges(layer));
+            node.OutEdges[layer] = newOut;
+
+            ArrayPool<NodeDistance<TDistance>>.Shared.Return(candidatesDistances);
+            // NOTE: reverse edges and, hence, InLocks are needed only if removals happen. They may impose serious parrallelization bottleneck.
+            if (parameters.AllowRemovals == false) return;
+
             var newOutSpan = newOut.AsSpan();
 
             int commonLen = oldOut.Count;
@@ -214,11 +221,6 @@ namespace HNSWIndex
                 for (int j = 0; j < oldOut.Count; j++) { if (oldOutSpan[j] == id) { existed = true; break; } }
                 if (!existed) added[addedCount++] = id;
             }
-
-            node.OutEdges[layer] = newOut;
-
-            // NOTE: reverse edges and, hence, InLocks are needed only if removals happen. They may impose serious parrallelization bottleneck.
-            if (parameters.AllowRemovals == false) return;
 
             for (int i = 0; i < removedCount; i++)
             {

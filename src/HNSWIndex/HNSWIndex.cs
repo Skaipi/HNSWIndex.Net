@@ -204,7 +204,7 @@ namespace HNSWIndex
         /// </summary>
         public HNSWInfo GetInfo()
         {
-            return new HNSWInfo(data.Nodes, data.RemovedIndexes, data.GetTopLayer());
+            return new HNSWInfo(data.Nodes, data.RemovedIndexes, data.GetTopLayer(), parameters.AllowRemovals);
         }
 
         /// <summary>
