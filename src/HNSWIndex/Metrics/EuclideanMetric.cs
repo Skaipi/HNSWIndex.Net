@@ -13,29 +13,51 @@ namespace HNSWIndex.Metrics
             int i = 0;
             int length = a.Length;
 
-            fixed (float* pa = a, pb = b)
+            fixed (float* ptrA = a, ptrB = b)
             {
-                float* ptrA = pa;
-                float* ptrB = pb;
 
                 if (Avx.IsSupported)
                 {
-                    Vector256<float> accumulator256 = Vector256<float>.Zero;
+                    Vector256<float> acc256 = Vector256<float>.Zero;
                     int step = Vector256<float>.Count;
-                    int stop = length - step;
+                    int stop = length & ~(step - 1);
 
-                    for (; i <= stop; i += step)
+                    for (; i + 2 * step <= stop; i += 2 * step)
                     {
-                        Vector256<float> vu = Avx.LoadVector256(ptrA + i);
-                        Vector256<float> vv = Avx.LoadVector256(ptrB + i);
-                        Vector256<float> diff = Avx.Subtract(vu, vv);
-                        Vector256<float> dist = Avx.Multiply(diff, diff);
-                        accumulator256 = Avx.Add(accumulator256, dist);
+                        var a0 = Avx.LoadVector256(ptrA + i);
+                        var b0 = Avx.LoadVector256(ptrB + i);
+                        var d0 = Avx.Subtract(a0, b0);
+                        acc256 = Fma.IsSupported ? Fma.MultiplyAdd(d0, d0, acc256) : Avx.Add(acc256, Avx.Multiply(d0, d0));
+
+                        var a1 = Avx.LoadVector256(ptrA + i + step);
+                        var b1 = Avx.LoadVector256(ptrB + i + step);
+                        var d1 = Avx.Subtract(a1, b1);
+                        acc256 = Fma.IsSupported ? Fma.MultiplyAdd(d1, d1, acc256) : Avx.Add(acc256, Avx.Multiply(d1, d1));
+
+                        // Vector256<float> vu = Avx.LoadVector256(ptrA + i);
+                        // Vector256<float> vv = Avx.LoadVector256(ptrB + i);
+                        // Vector256<float> diff = Avx.Subtract(vu, vv);
+                        // Vector256<float> dist = Avx.Multiply(diff, diff);
+                        // acc256 = Fma.IsSupported ? Fma.MultiplyAdd(diff, diff, acc256) : Avx.Add(acc256, dist);
+                    }
+                    for (; i < stop; i += step)
+                    {
+                        var a0 = Avx.LoadVector256(ptrA + i);
+                        var b0 = Avx.LoadVector256(ptrB + i);
+                        var d0 = Avx.Subtract(a0, b0);
+                        acc256 = Fma.IsSupported ? Fma.MultiplyAdd(d0, d0, acc256) : Avx.Add(acc256, Avx.Multiply(d0, d0));
                     }
 
-                    Vector256<float> temp = Avx.HorizontalAdd(accumulator256, accumulator256);
-                    temp = Avx.HorizontalAdd(temp, temp);
-                    float partialSum = temp.GetElement(0) + temp.GetElement(1);
+                    Vector128<float> lower = acc256.GetLower();
+                    Vector128<float> upper = Avx.ExtractVector128(acc256, 1);
+                    Vector128<float> sum128 = Sse.Add(lower, upper);
+                    sum128 = Sse3.HorizontalAdd(sum128, sum128);
+                    sum128 = Sse3.HorizontalAdd(sum128, sum128);
+                    float partialSum = sum128.ToScalar();
+
+                    // Vector256<float> temp = Avx.HorizontalAdd(acc256, acc256);
+                    // temp = Avx.HorizontalAdd(temp, temp);
+                    // float partialSum = temp.GetElement(0) + temp.GetElement(1);
 
                     // Handle remainder
                     for (; i < length; i++)
