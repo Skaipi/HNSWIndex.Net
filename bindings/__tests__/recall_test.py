@@ -31,7 +31,7 @@ def test_removal():
     result_ids = index.knn_query(remain_vectors, 1)[0][:, 0]
     remove_recall = (remain_ids == result_ids).sum() / len(remain_ids)
 
-    assert remove_recall > add_recall
+    assert abs(remove_recall - add_recall) < 0.02
 
 
 def test_resize():

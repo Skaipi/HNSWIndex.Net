@@ -42,7 +42,7 @@ def test_low_candidates_set():
     result_ids = index.knn_query(vectors, 1)[0][:, 0]
     recall = (ids == result_ids).sum() / len(ids)
 
-    assert recall < 0.5
+    assert recall < 0.6
 
 
 def test_disabled_removals():

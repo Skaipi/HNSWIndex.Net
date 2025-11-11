@@ -139,6 +139,10 @@ def _as_2d_f32(x: npt.ArrayLike, dim_expected=None):
 class Index:
     """
     HNSW Index class for efficient nearest neighbor querying in high dimensional spaces.
+    Supported metrics:
+     - "sq_euclid"
+     - "cosine"
+     - "ucosine"
 
     Examples
     --------
