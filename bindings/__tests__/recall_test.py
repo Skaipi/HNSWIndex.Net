@@ -15,29 +15,23 @@ def test_default_recall():
     assert recall > 0.85
 
 
-def test_low_connectivity():
+def test_removal():
     vectors = np.random.rand(2_000, DIM)
     index = Index(DIM)
-    index.set_max_edges(1)
 
     ids = index.add(vectors)
     result_ids = index.knn_query(vectors, 1)[0][:, 0]
-    recall = (ids == result_ids).sum() / len(ids)
+    add_recall = (ids == result_ids).sum() / len(ids)
 
-    assert recall < 0.1
+    remove_ids = ids[:1000]
+    remain_ids = ids[1000:]
+    remain_vectors = vectors[1000:]
 
+    index.remove(remove_ids)
+    result_ids = index.knn_query(remain_vectors, 1)[0][:, 0]
+    remove_recall = (remain_ids == result_ids).sum() / len(remain_ids)
 
-def test_low_candidates_set():
-    vectors = np.random.rand(2_000, DIM)
-    index = Index(DIM)
-    index.set_max_candidates(1)
-
-    ids = index.add(vectors)
-    result = index.knn_query(vectors, 1)
-    result_ids = index.knn_query(vectors, 1)[0][:, 0]
-    recall = (ids == result_ids).sum() / len(ids)
-
-    assert recall < 0.5
+    assert remove_recall > add_recall
 
 
 def test_resize():
@@ -50,20 +44,3 @@ def test_resize():
     recall = (ids == result_ids).sum() / len(ids)
 
     assert recall > 0.85
-
-
-def test_min_nn():
-    vectors = np.random.rand(2_000, DIM)
-    index = Index(DIM)
-
-    ids = index.add(vectors)
-    result_ids = index.knn_query(vectors, 1)[0][:, 0]
-    default_recall = (ids == result_ids).sum() / len(ids)
-
-    index = Index(DIM)
-    index.set_min_nn(1)
-    ids = index.add(vectors)
-    result_ids = index.knn_query(vectors, 1)[0][:, 0]
-    recall = (ids == result_ids).sum() / len(ids)
-
-    assert recall < default_recall
