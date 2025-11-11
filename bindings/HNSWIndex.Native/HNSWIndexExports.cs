@@ -2,6 +2,7 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 using HNSWIndex;
 using HNSWIndex.Metrics;
 
@@ -39,11 +40,25 @@ public static unsafe class HNSWIndexExport
     }
 
     [UnmanagedCallersOnly(EntryPoint = "hnsw_create", CallConvs = new[] { typeof(CallConvCdecl) })]
-    public static nint Create()
+    public static nint Create(char* distanceMetric)
     {
         try
         {
-            var index = new HNSWIndex<float[], float>(SquaredEuclideanMetric.Compute, _parameters);
+            HNSWIndex<float[], float> index;
+            switch (Marshal.PtrToStringUTF8((nint)distanceMetric))
+            {
+                case "sq_euclid":
+                    index = new(SquaredEuclideanMetric.Compute, _parameters);
+                    break;
+                case "cosine":
+                    index = new(CosineMetric.Compute, _parameters);
+                    break;
+                case "ucosine":
+                    index = new(CosineMetric.UnitCompute, _parameters);
+                    break;
+                default:
+                    throw new ArgumentException("Unsupported distance metric: " + new string(distanceMetric));
+            }
             _parameters = new(); // reset parameters for next instance
             return MakeHandle(index);
         }

@@ -44,7 +44,7 @@ def _load_lib():
 # Application Binary Interface
 lib = _load_lib()
 lib.hnsw_create.restype = ct.c_void_p
-lib.hnsw_create.argtypes = []
+lib.hnsw_create.argtypes = [ct.c_char_p]
 
 lib.hnsw_free.restype = None
 lib.hnsw_free.argtypes = [ct.c_void_p]
@@ -137,9 +137,20 @@ def _as_2d_f32(x: npt.ArrayLike, dim_expected=None):
 
 
 class Index:
-    """HNSW Index class for efficient nearest neighbor querying in high dimensional spaces"""
+    """
+    HNSW Index class for efficient nearest neighbor querying in high dimensional spaces.
 
-    def __init__(self, dim: int, metric="l2sq"):
+    Examples
+    --------
+    >>> # Squared Euclidean distance by default
+    >>> index = Index(dim=128, metric="sq_euclid")
+    >>> vectors = np.random.rand(2_000, 128)
+    >>> index.set_collection_size(2000)
+    >>> ids = index.add(vectors)
+    >>> results = index.knn_query(vectors, k=1)
+    """
+
+    def __init__(self, dim: int, metric="sq_euclid"):
         self.dim = dim
         self.metric = metric
         self._initialized = False
@@ -152,7 +163,7 @@ class Index:
             self._h = None
 
     def __initialize(self):
-        h = lib.hnsw_create()
+        h = lib.hnsw_create(self.metric.encode("utf-8"))
         if not h:
             raise RuntimeError("hnsw_create failed: " + _last_error())
         self._h = h
