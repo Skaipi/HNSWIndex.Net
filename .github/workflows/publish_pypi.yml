@@ -37,17 +37,15 @@ jobs:
       - name: Install cibuildwheel
         run: python -m pip install --upgrade pip && python -m pip install "cibuildwheel~=3.3"
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "9.0.x"
-
       - name: Build wheels
         env:
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
-          CIBW_BEFORE_ALL_LINUX: "bash ./build.sh"
           CIBW_BEFORE_ALL_MACOS: "bash ./build.sh"
           CIBW_BEFORE_ALL_WINDOWS: "bash build.sh"
+          CIBW_BEFORE_ALL_LINUX: >
+            curl -L https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh &&
+            bash ./dotnet-install.sh --version latest &&
+            bash ./build.sh
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: ""
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: ""
         run: python -m cibuildwheel --output-dir wheelhouse
