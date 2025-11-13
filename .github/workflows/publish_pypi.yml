@@ -44,9 +44,9 @@ jobs:
           CIBW_BEFORE_ALL_WINDOWS: "bash build.sh"
           CIBW_BEFORE_ALL_LINUX: >
             curl -L https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh &&
-            bash ./dotnet-install.sh --version latest &&
+            bash ./dotnet-install.sh --channel 9.0 &&
             bash ./build.sh
-          CIBW_ENVIRONMENT_LINUX: "PATH=$HOME/.dotnet:$PATH DOTNET_ROOT=$HOME/.dotnet"
+          CIBW_ENVIRONMENT_LINUX: "PATH=$HOME/.dotnet:$PATH DOTNET_ROOT=$HOME/.dotnet DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1"
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: ""
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: ""
         run: python -m cibuildwheel --output-dir wheelhouse
