@@ -43,12 +43,7 @@ jobs:
           CIBW_BEFORE_ALL_MACOS: "bash ./build.sh"
           CIBW_BEFORE_ALL_WINDOWS: "bash build.sh"
           # manylinux requires clang and dotnet environment as they are not present by default
-          CIBW_BEFORE_ALL_LINUX: >
-            (command -v dnf >/dev/null 2>&1 && dnf install -y clang) ||
-            (command -v yum >/dev/null 2>&1 && yum install -y clang) &&
-            curl -L https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh &&
-            bash ./dotnet-install.sh --channel 9.0 &&
-            bash ./build.sh
+          CIBW_BEFORE_ALL_LINUX: "bash ./github/before_all_linux.sh"
           CIBW_ENVIRONMENT_LINUX: "PATH=$HOME/.dotnet:$PATH DOTNET_ROOT=$HOME/.dotnet DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1"
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: ""
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: ""
