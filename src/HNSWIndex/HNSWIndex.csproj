@@ -12,7 +12,7 @@
     <CheckForOverflowUnderflow>false</CheckForOverflowUnderflow>
     <PackageId>HNSWIndex</PackageId>
     <Title>HNSWIndex</Title>
-    <Version>1.5.0</Version>
+    <Version>1.6.0</Version>
     <Authors>Mateusz Skarupski</Authors>
     <Company />
     <Product>HNSWIndex</Product>
