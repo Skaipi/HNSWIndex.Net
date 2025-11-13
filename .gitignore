@@ -9,6 +9,8 @@
 
 # Build artifacts
 artifacts/
+dist/
+*.egg-info
 
 # Visual Studio profiler
 *.psess
@@ -20,5 +22,6 @@ artifacts/
 .vs/
 .vscode/
 
-# Profiler app
-HNSWIndex.Profiler/
+# Python bindings
+__pycache__/
+.coverage

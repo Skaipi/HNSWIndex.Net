@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Optimize>true</Optimize>
+    <CheckForOverflowUnderflow>false</CheckForOverflowUnderflow>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PublishAot>true</PublishAot>
+    <SelfContained>true</SelfContained>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <DisableRuntimeMarshalling>true</DisableRuntimeMarshalling>
+    <OptimizationPreference>Speed</OptimizationPreference>
+    <StripSymbols>true</StripSymbols>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\HNSWIndex\HNSWIndex.csproj" />
+  </ItemGroup>
+
+  <Target Name="CopyNativeToArtifacts" AfterTargets="Publish">
+    <PropertyGroup>
+      <_Rid>$(RuntimeIdentifier)</_Rid>
+      <_Out>$(MSBuildThisFileDirectory)..\artifacts\native\$(_Rid)\</_Out>
+    </PropertyGroup>
+    <ItemGroup>
+      <_PublishedLibs Include="$(PublishDir)*HNSWIndex.Native.*" />
+    </ItemGroup>
+    <MakeDir Directories="$(_Out)" />
+    <Copy SourceFiles="@(_PublishedLibs)" DestinationFolder="$(_Out)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>
