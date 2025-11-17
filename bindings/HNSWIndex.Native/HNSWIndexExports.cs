@@ -13,7 +13,6 @@ public static unsafe class HNSWIndexExport
 
     private static nint MakeHandle(HNSWIndex<float[], float> obj) => GCHandle.ToIntPtr(GCHandle.Alloc(obj, GCHandleType.Normal));
 
-    //TODO: Handle multi instance scenario
     private static HNSWParameters<float> _parameters = new();
 
     private static HNSWIndex<float[], float> Get(nint h)
@@ -29,11 +28,11 @@ public static unsafe class HNSWIndexExport
     public static int GetLastErrorUtf8(byte* buf, int bufLen)
     {
         var s = _lastError ?? string.Empty;
-        var need = System.Text.Encoding.UTF8.GetByteCount(s);
+        var need = Encoding.UTF8.GetByteCount(s);
         if (bufLen > 0 && buf != null)
         {
             int toWrite = Math.Max(0, bufLen - 1);
-            int written = System.Text.Encoding.UTF8.GetBytes(s, new Span<byte>(buf, Math.Min(need, toWrite)));
+            int written = Encoding.UTF8.GetBytes(s, new Span<byte>(buf, Math.Min(need, toWrite)));
             buf[written] = 0; // null terminate string
         }
         return need;
