@@ -13,7 +13,6 @@ namespace HNSWIndex
 
         private readonly GraphNavigator<TVector, TDistance> navigator;
 
-        private bool initialized;
 
         /// <summary>
         /// Construct KNN search graph with arbitrary distance function
@@ -23,7 +22,6 @@ namespace HNSWIndex
             hnswParameters ??= new HNSWParameters<TDistance>();
             parameters = hnswParameters;
 
-            initialized = false;
             data = new GraphData<TVector, TDistance>(distFnc, hnswParameters);
             navigator = new GraphNavigator<TVector, TDistance>(data);
             connector = new GraphConnector<TVector, TDistance>(data, navigator, hnswParameters);
@@ -42,7 +40,6 @@ namespace HNSWIndex
             if (snapshot.DataSnapshot is null)
                 throw new ArgumentNullException(nameof(snapshot.DataSnapshot), "Data cannot be null during deserialization.");
 
-            initialized = true;
             parameters = snapshot.Parameters;
             data = new GraphData<TVector, TDistance>(snapshot.DataSnapshot, distFnc, snapshot.Parameters);
 
@@ -57,8 +54,6 @@ namespace HNSWIndex
         /// </summary>
         public int Add(TVector item)
         {
-            if (!initialized) initialized = true;
-
             var itemId = data.AddItem(item);
             if (itemId == -1) return itemId;
 
