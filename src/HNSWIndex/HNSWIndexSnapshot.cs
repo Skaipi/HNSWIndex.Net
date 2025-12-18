@@ -7,20 +7,20 @@ namespace HNSWIndex
     /// Wrapper for HNSWIndex for serialization.
     /// </summary>
     [ProtoContract]
-    internal class HNSWIndexSnapshot<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
+    internal class HNSWIndexSnapshot<TVector, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         [ProtoMember(1)]
         internal HNSWParameters<TDistance>? Parameters { get; set; }
 
         [ProtoMember(2)]
-        internal GraphDataSnapshot<TLabel, TDistance>? DataSnapshot { get; set; }
+        internal GraphDataSnapshot<TVector, TDistance>? DataSnapshot { get; set; }
 
         internal HNSWIndexSnapshot() { }
 
-        internal HNSWIndexSnapshot(HNSWParameters<TDistance> parameters, GraphData<TLabel, TDistance> data)
+        internal HNSWIndexSnapshot(HNSWParameters<TDistance> parameters, GraphData<TVector, TDistance> data)
         {
             Parameters = parameters;
-            DataSnapshot = new GraphDataSnapshot<TLabel, TDistance>(data);
+            DataSnapshot = new GraphDataSnapshot<TVector, TDistance>(data);
         }
     }
 }

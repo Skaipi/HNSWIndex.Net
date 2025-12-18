@@ -3,14 +3,14 @@ using System.Numerics;
 
 namespace HNSWIndex
 {
-    internal class GraphConnector<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
+    internal class GraphConnector<TVector, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         private static Func<int, bool> noFilter = _ => true;
-        private GraphData<TLabel, TDistance> data;
-        private GraphNavigator<TLabel, TDistance> navigator;
+        private GraphData<TVector, TDistance> data;
+        private GraphNavigator<TVector, TDistance> navigator;
         private HNSWParameters<TDistance> parameters;
 
-        internal GraphConnector(GraphData<TLabel, TDistance> graphData, GraphNavigator<TLabel, TDistance> graphNavigator, HNSWParameters<TDistance> hnswParams)
+        internal GraphConnector(GraphData<TVector, TDistance> graphData, GraphNavigator<TVector, TDistance> graphNavigator, HNSWParameters<TDistance> hnswParams)
         {
             data = graphData;
             navigator = graphNavigator;

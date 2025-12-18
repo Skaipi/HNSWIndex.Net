@@ -8,13 +8,13 @@ namespace HNSWIndex
     /// Wrapper for GraphData for serialization.
     /// </summary>
     [ProtoContract]
-    internal class GraphDataSnapshot<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
+    internal class GraphDataSnapshot<TVector, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         [ProtoMember(1)]
         internal Node[]? Nodes { get; set; }
 
         [ProtoMember(2)]
-        internal NestedArrayWrapper<TLabel>[]? Items { get; set; }
+        internal NestedArrayWrapper<TVector>[]? Items { get; set; }
 
         [ProtoMember(3)]
         internal ConcurrentQueue<int>? RemovedIndexes { get; set; }
@@ -31,7 +31,7 @@ namespace HNSWIndex
         [ProtoMember(7)]
         internal int Count;
 
-        internal TLabel[]? ParsedItems
+        internal TVector[]? ParsedItems
         {
             get
             {
@@ -53,10 +53,10 @@ namespace HNSWIndex
 
         internal GraphDataSnapshot() { }
 
-        internal GraphDataSnapshot(GraphData<TLabel, TDistance> data)
+        internal GraphDataSnapshot(GraphData<TVector, TDistance> data)
         {
             Nodes = data.Nodes.Where(n => n is not null).ToArray();
-            Items = data.Items.Where(i => i is not null).Select(i => new NestedArrayWrapper<TLabel>(i)).ToArray();
+            Items = data.Items.Where(i => i is not null).Select(i => new NestedArrayWrapper<TVector>(i)).ToArray();
             RemovedIndexes = data.RemovedIndexes;
             EntryPointId = data.EntryPointId;
             Capacity = data.Capacity;

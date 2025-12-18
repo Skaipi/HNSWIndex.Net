@@ -2,17 +2,17 @@
 
 namespace HNSWIndex
 {
-    internal class GraphNavigator<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
+    internal class GraphNavigator<TVector, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         private static Func<int, bool> noFilter = _ => true;
         private static Func<int, bool> noLayerFilter = (_) => true;
 
         private VisitedListPool pool;
-        private GraphData<TLabel, TDistance> data;
+        private GraphData<TVector, TDistance> data;
         private DistanceComparer<TDistance> fartherFirst;
         private ReverseDistanceComparer<TDistance> closerFirst;
 
-        internal GraphNavigator(GraphData<TLabel, TDistance> graphData)
+        internal GraphNavigator(GraphData<TVector, TDistance> graphData)
         {
             data = graphData;
             pool = new VisitedListPool(Environment.ProcessorCount, graphData.Capacity);
@@ -25,7 +25,7 @@ namespace HNSWIndex
         /// Default locking is in writer mode and can be changed.
         /// Optional filter function can discriminate specific candidates. 
         /// </summary>
-        internal Node FindEntryPoint(int dstLayer, TLabel query, Func<int, bool>? filterFnc = null)
+        internal Node FindEntryPoint(int dstLayer, TVector query, Func<int, bool>? filterFnc = null)
         {
             var bestPeer = data.EntryPoint;
             for (int layer = bestPeer.MaxLayer; layer > dstLayer; layer--)
@@ -37,7 +37,7 @@ namespace HNSWIndex
         /// Search for best entry point at specific layer.
         /// Filter funtion discriminates certain solution.
         /// </summary>
-        internal Node FindEntryAtLayer(int layer, Node startNode, TLabel query, Func<int, bool>? filterFnc = null)
+        internal Node FindEntryAtLayer(int layer, Node startNode, TVector query, Func<int, bool>? filterFnc = null)
         {
             filterFnc ??= noLayerFilter;
 
@@ -72,7 +72,7 @@ namespace HNSWIndex
         /// Search starts at entry point. Some points may be excluded from search with filter funcion.
         /// Default lock in this method is in writer mode.
         /// </summary>
-        internal NodeDistance<TDistance>[] SearchLayer(int entryPointId, int layer, int k, TLabel queryPoint, Func<int, bool>? filterFnc = null)
+        internal NodeDistance<TDistance>[] SearchLayer(int entryPointId, int layer, int k, TVector queryPoint, Func<int, bool>? filterFnc = null)
         {
             filterFnc ??= noFilter;
             var topCandidates = new BinaryHeap<NodeDistance<TDistance>, DistanceComparer<TDistance>>(k, fartherFirst);
@@ -138,7 +138,7 @@ namespace HNSWIndex
         }
 
         // TODO: Merge this method with SearchLayer
-        internal NodeDistance<TDistance>[] SearchLayerRange(int entryPointId, int layer, TDistance range, TLabel queryPoint, Func<int, bool>? filterFnc = null)
+        internal NodeDistance<TDistance>[] SearchLayerRange(int entryPointId, int layer, TDistance range, TVector queryPoint, Func<int, bool>? filterFnc = null)
         {
             filterFnc ??= noFilter;
             var topCandidates = new BinaryHeap<NodeDistance<TDistance>, DistanceComparer<TDistance>>(data.MaxEdges(layer), fartherFirst);

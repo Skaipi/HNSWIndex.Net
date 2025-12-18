@@ -3,30 +3,30 @@ using ProtoBuf;
 
 namespace HNSWIndex
 {
-    public class HNSWIndex<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
+    public class HNSWIndex<TVector, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         private readonly HNSWParameters<TDistance> parameters;
 
-        private readonly GraphData<TLabel, TDistance> data;
+        private readonly GraphData<TVector, TDistance> data;
 
-        private readonly GraphConnector<TLabel, TDistance> connector;
+        private readonly GraphConnector<TVector, TDistance> connector;
 
-        private readonly GraphNavigator<TLabel, TDistance> navigator;
+        private readonly GraphNavigator<TVector, TDistance> navigator;
 
         private bool initialized;
 
         /// <summary>
         /// Construct KNN search graph with arbitrary distance function
         /// </summary>
-        public HNSWIndex(Func<TLabel, TLabel, TDistance> distFnc, HNSWParameters<TDistance>? hnswParameters = null)
+        public HNSWIndex(Func<TVector, TVector, TDistance> distFnc, HNSWParameters<TDistance>? hnswParameters = null)
         {
             hnswParameters ??= new HNSWParameters<TDistance>();
             parameters = hnswParameters;
 
             initialized = false;
-            data = new GraphData<TLabel, TDistance>(distFnc, hnswParameters);
-            navigator = new GraphNavigator<TLabel, TDistance>(data);
-            connector = new GraphConnector<TLabel, TDistance>(data, navigator, hnswParameters);
+            data = new GraphData<TVector, TDistance>(distFnc, hnswParameters);
+            navigator = new GraphNavigator<TVector, TDistance>(data);
+            connector = new GraphConnector<TVector, TDistance>(data, navigator, hnswParameters);
 
             data.Reallocated += OnDataResized;
         }
@@ -34,7 +34,7 @@ namespace HNSWIndex
         /// <summary>
         /// Construct KNN search graph from serialized snapshot.
         /// </summary>
-        internal HNSWIndex(Func<TLabel, TLabel, TDistance> distFnc, HNSWIndexSnapshot<TLabel, TDistance> snapshot)
+        internal HNSWIndex(Func<TVector, TVector, TDistance> distFnc, HNSWIndexSnapshot<TVector, TDistance> snapshot)
         {
             if (snapshot.Parameters is null)
                 throw new ArgumentNullException(nameof(snapshot.Parameters), "Parameters cannot be null during deserialization.");
@@ -44,10 +44,10 @@ namespace HNSWIndex
 
             initialized = true;
             parameters = snapshot.Parameters;
-            data = new GraphData<TLabel, TDistance>(snapshot.DataSnapshot, distFnc, snapshot.Parameters);
+            data = new GraphData<TVector, TDistance>(snapshot.DataSnapshot, distFnc, snapshot.Parameters);
 
-            navigator = new GraphNavigator<TLabel, TDistance>(data);
-            connector = new GraphConnector<TLabel, TDistance>(data, navigator, parameters);
+            navigator = new GraphNavigator<TVector, TDistance>(data);
+            connector = new GraphConnector<TVector, TDistance>(data, navigator, parameters);
 
             data.Reallocated += OnDataResized;
         }
@@ -55,7 +55,7 @@ namespace HNSWIndex
         /// <summary>
         /// Add new item with given label to the graph.
         /// </summary>
-        public int Add(TLabel item)
+        public int Add(TVector item)
         {
             if (!initialized) initialized = true;
 
@@ -72,7 +72,7 @@ namespace HNSWIndex
         /// <summary>
         /// Add collection of items to the graph
         /// </summary>
-        public int[] Add(List<TLabel> items)
+        public int[] Add(List<TVector> items)
         {
             var idArray = new int[items.Count];
             Parallel.For(0, items.Count, (i) =>
@@ -107,7 +107,7 @@ namespace HNSWIndex
         /// <summary>
         /// Get list of items inserted into the graph structure
         /// </summary>
-        public List<TLabel> Items()
+        public List<TVector> Items()
         {
             return data.Items.ToList();
         }
@@ -117,9 +117,9 @@ namespace HNSWIndex
         /// Optionally provide filter function to ignore certain labels.
         /// Layer parameters indicates at which layer search should be performed (0 - base layer)
         /// </summary>
-        public List<KNNResult<TLabel, TDistance>> KnnQuery(TLabel query, int k, Func<TLabel, bool>? filterFnc = null, int layer = 0)
+        public List<KNNResult<TVector, TDistance>> KnnQuery(TVector query, int k, Func<TVector, bool>? filterFnc = null, int layer = 0)
         {
-            if (data.Count <= 0 || k < 1) return new List<KNNResult<TLabel, TDistance>>();
+            if (data.Count <= 0 || k < 1) return new List<KNNResult<TVector, TDistance>>();
 
             Func<int, bool> indexFilter = _ => true;
             if (filterFnc is not null)
@@ -139,9 +139,9 @@ namespace HNSWIndex
         /// <summary>
         /// Perform batch knn query.
         /// </summary>
-        public List<KNNResult<TLabel, TDistance>>[] BatchKnnQuery(IList<TLabel> queries, int k, Func<TLabel, bool>? filterFnc = null, int layer = 0)
+        public List<KNNResult<TVector, TDistance>>[] BatchKnnQuery(IList<TVector> queries, int k, Func<TVector, bool>? filterFnc = null, int layer = 0)
         {
-            var result = new List<KNNResult<TLabel, TDistance>>[queries.Count];
+            var result = new List<KNNResult<TVector, TDistance>>[queries.Count];
             Parallel.For(0, queries.Count, (i) =>
             {
                 result[i] = KnnQuery(queries[i], k, filterFnc, layer);
@@ -154,9 +154,9 @@ namespace HNSWIndex
         /// Optionally provide filter function to ignore certain labels.
         /// Layer parameters indicates at which layer search should be performed (0 - base layer)
         /// </summary>
-        public List<KNNResult<TLabel, TDistance>> RangeQuery(TLabel query, TDistance range, Func<TLabel, bool>? filterFnc = null, int layer = 0)
+        public List<KNNResult<TVector, TDistance>> RangeQuery(TVector query, TDistance range, Func<TVector, bool>? filterFnc = null, int layer = 0)
         {
-            if (data.Count <= 0) return new List<KNNResult<TLabel, TDistance>>();
+            if (data.Count <= 0) return new List<KNNResult<TVector, TDistance>>();
 
             Func<int, bool> indexFilter = _ => true;
             if (filterFnc is not null)
@@ -170,9 +170,9 @@ namespace HNSWIndex
         /// <summary>
         /// Perform batch range query.
         /// </summary>
-        public List<KNNResult<TLabel, TDistance>>[] BatchRangeQuery(IList<TLabel> queries, TDistance range, Func<TLabel, bool>? filterFnc = null, int layer = 0)
+        public List<KNNResult<TVector, TDistance>>[] BatchRangeQuery(IList<TVector> queries, TDistance range, Func<TVector, bool>? filterFnc = null, int layer = 0)
         {
-            var result = new List<KNNResult<TLabel, TDistance>>[queries.Count];
+            var result = new List<KNNResult<TVector, TDistance>>[queries.Count];
             Parallel.For(0, queries.Count, (i) =>
             {
                 result[i] = RangeQuery(queries[i], range, filterFnc, layer);
@@ -183,13 +183,13 @@ namespace HNSWIndex
         /// <summary>
         /// Perform knn query over all layers in graph. Optionally provide range of layers with max and min layer parameters.
         /// </summary>
-        public List<KNNResult<TLabel, TDistance>>[] MultiLayerKnnQuery(TLabel query, int k, int maxLayer = int.MaxValue, int minLayer = 0)
+        public List<KNNResult<TVector, TDistance>>[] MultiLayerKnnQuery(TVector query, int k, int maxLayer = int.MaxValue, int minLayer = 0)
         {
             // TODO: Add checks for invalid max and min layer
             if (data.Count <= 0 || k < 1) return [];
 
             var ep = data.EntryPoint.MaxLayer >= maxLayer ? navigator.FindEntryPoint(maxLayer, query) : data.EntryPoint;
-            var result = new List<KNNResult<TLabel, TDistance>>[Math.Min(ep.MaxLayer, maxLayer) + 1];
+            var result = new List<KNNResult<TVector, TDistance>>[Math.Min(ep.MaxLayer, maxLayer) + 1];
             for (int layer = Math.Min(ep.MaxLayer, maxLayer); layer >= minLayer; layer--)
             {
                 var candidates = navigator.SearchLayer(ep.Id, layer, k, query).OrderBy(c => c.Dist).ToList();
@@ -214,7 +214,7 @@ namespace HNSWIndex
         {
             using (var file = File.Create(filePath))
             {
-                var snapshot = new HNSWIndexSnapshot<TLabel, TDistance>(parameters, data);
+                var snapshot = new HNSWIndexSnapshot<TVector, TDistance>(parameters, data);
                 Serializer.Serialize(file, snapshot);
             }
         }
@@ -222,18 +222,18 @@ namespace HNSWIndex
         /// <summary>
         /// Reconstruct the graph from a serialized snapshot image.
         /// </summary>
-        public static HNSWIndex<TLabel, TDistance> Deserialize(Func<TLabel, TLabel, TDistance> distFnc, string filePath)
+        public static HNSWIndex<TVector, TDistance> Deserialize(Func<TVector, TVector, TDistance> distFnc, string filePath)
         {
             using (var file = File.OpenRead(filePath))
             {
-                var snapshot = Serializer.Deserialize<HNSWIndexSnapshot<TLabel, TDistance>>(file);
-                return new HNSWIndex<TLabel, TDistance>(distFnc, snapshot);
+                var snapshot = Serializer.Deserialize<HNSWIndexSnapshot<TVector, TDistance>>(file);
+                return new HNSWIndex<TVector, TDistance>(distFnc, snapshot);
             }
         }
 
-        private KNNResult<TLabel, TDistance> CandidateToResult(NodeDistance<TDistance> nodeDistance)
+        private KNNResult<TVector, TDistance> CandidateToResult(NodeDistance<TDistance> nodeDistance)
         {
-            return new KNNResult<TLabel, TDistance>(nodeDistance.Id, data.Items[nodeDistance.Id], nodeDistance.Dist);
+            return new KNNResult<TVector, TDistance>(nodeDistance.Id, data.Items[nodeDistance.Id], nodeDistance.Dist);
         }
 
         private void OnDataResized(object? sender, ReallocateEventArgs e)

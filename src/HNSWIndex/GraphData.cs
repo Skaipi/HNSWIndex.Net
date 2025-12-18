@@ -9,13 +9,13 @@ namespace HNSWIndex
     /// All lock related members are ommitted from serialization 
     /// and should be initialized in deserialization constructor.
     /// </summary>
-    internal class GraphData<TLabel, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
+    internal class GraphData<TVector, TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
         internal event EventHandler<ReallocateEventArgs>? Reallocated;
 
         internal object indexLock = new object();
         internal Node[] Nodes { get; private set; }
-        internal TLabel[] Items { get; private set; }
+        internal TVector[] Items { get; private set; }
         internal ConcurrentQueue<int> RemovedIndexes { get; private set; }
         internal GraphRegionLocker GraphLocker;
         internal object entryPointLock = new object();
@@ -30,12 +30,12 @@ namespace HNSWIndex
         private int maxEdges;
         private bool zeroLayerGuaranteed;
         private bool allowRemovals;
-        private Func<TLabel, TLabel, TDistance> distanceFnc;
+        private Func<TVector, TVector, TDistance> distanceFnc;
 
         /// <summary>
         /// Constructor for the graph data.
         /// </summary>
-        internal GraphData(Func<TLabel, TLabel, TDistance> distance, HNSWParameters<TDistance> parameters)
+        internal GraphData(Func<TVector, TVector, TDistance> distance, HNSWParameters<TDistance> parameters)
         {
             distanceFnc = distance;
             rng = parameters.RandomSeed < 0 ? new Random() : new Random(parameters.RandomSeed);
@@ -47,14 +47,14 @@ namespace HNSWIndex
 
             RemovedIndexes = new ConcurrentQueue<int>();
             Nodes = new Node[parameters.CollectionSize];
-            Items = new TLabel[parameters.CollectionSize];
+            Items = new TVector[parameters.CollectionSize];
             GraphLocker = new GraphRegionLocker(parameters.CollectionSize);
         }
 
         /// <summary>
         /// Constructor for the graph data from serialization snapshot.
         /// </summary>
-        internal GraphData(GraphDataSnapshot<TLabel, TDistance> snapshot, Func<TLabel, TLabel, TDistance> distance, HNSWParameters<TDistance> parameters)
+        internal GraphData(GraphDataSnapshot<TVector, TDistance> snapshot, Func<TVector, TVector, TDistance> distance, HNSWParameters<TDistance> parameters)
         {
             distanceFnc = distance;
             rng = parameters.RandomSeed < 0 ? new Random() : new Random(parameters.RandomSeed);
@@ -64,7 +64,7 @@ namespace HNSWIndex
             allowRemovals = parameters.AllowRemovals;
 
             Nodes = snapshot.ParsedNodes ?? new Node[parameters.CollectionSize];
-            Items = snapshot.ParsedItems ?? new TLabel[parameters.CollectionSize];
+            Items = snapshot.ParsedItems ?? new TVector[parameters.CollectionSize];
             GraphLocker = new GraphRegionLocker(snapshot.Capacity);
             RemovedIndexes = snapshot.RemovedIndexes ?? new ConcurrentQueue<int>();
             EntryPointId = snapshot.EntryPointId;
@@ -76,7 +76,7 @@ namespace HNSWIndex
         /// <summary>
         /// Add new item to the graph.
         /// </summary>
-        internal int AddItem(TLabel item)
+        internal int AddItem(TVector item)
         {
             var topLayer = GetRandomLayer();
             if (topLayer < 0) return -1;
@@ -130,7 +130,7 @@ namespace HNSWIndex
         /// <summary>
         /// Replace node at given id
         /// </summary>
-        internal int UpdateItem(int itemId, TLabel label)
+        internal int UpdateItem(int itemId, TVector label)
         {
             var topLayer = GetRandomLayer();
             if (topLayer < 0) return -1;
@@ -231,7 +231,7 @@ namespace HNSWIndex
         /// Proxy for distance function
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal TDistance Distance(TLabel a, TLabel b)
+        internal TDistance Distance(TVector a, TVector b)
         {
             return distanceFnc(a, b);
         }
@@ -240,7 +240,7 @@ namespace HNSWIndex
         /// Proxy for distance between graph vertex and arbitrary point
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal TDistance Distance(int a, TLabel b)
+        internal TDistance Distance(int a, TVector b)
         {
             return distanceFnc(Items[a], b);
         }
