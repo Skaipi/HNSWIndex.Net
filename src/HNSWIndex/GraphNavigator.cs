@@ -138,6 +138,7 @@ namespace HNSWIndex
         }
 
         // TODO: Merge this method with SearchLayer
+        // Maybe using proper filter function that checks distance range as well
         internal NodeDistance<TDistance>[] SearchLayerRange(int entryPointId, int layer, TDistance range, TVector queryPoint, Func<int, bool>? filterFnc = null)
         {
             filterFnc ??= noFilter;
@@ -147,7 +148,7 @@ namespace HNSWIndex
             var entry = new NodeDistance<TDistance>(entryPointId, data.Distance(entryPointId, queryPoint));
             var farthestResultDist = TDistance.MaxValue;
 
-            if (filterFnc(entryPointId))
+            if (filterFnc(entryPointId) && entry.Dist <= range)
             {
                 topCandidates.Push(entry);
                 farthestResultDist = entry.Dist;

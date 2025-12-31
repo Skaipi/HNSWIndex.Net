@@ -226,5 +226,24 @@
                 Assert.IsTrue(layer.AvgOutEdges == layer.AvgInEdges);
             }
         }
+
+        [TestMethod]
+        public void RangeQueryTest()
+        {
+            Assert.IsNotNull(vectors);
+
+            var index = new HNSWIndex<float[], float>(Metrics.SquaredEuclideanMetric.Compute);
+            for (int i = 0; i < vectors.Count; i++)
+            {
+                index.Add(vectors[i]);
+            }
+
+            var range = 32.0f;
+
+            // ensure all results are within the range
+            var batchResults = index.BatchRangeQuery(vectors, range);
+            foreach (var results in batchResults)
+                Assert.IsTrue(results.All(r => r.Distance <= range));
+        }
     }
 }
