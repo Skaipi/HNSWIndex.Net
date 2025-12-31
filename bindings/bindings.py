@@ -161,9 +161,8 @@ class Index:
         self._h = None
 
     def __del__(self):
-        h = getattr(self, "_h", None)
-        if h:
-            lib.hnsw_free(h)
+        if self._h:
+            lib.hnsw_free(self._h)
             self._h = None
 
     def __initialize(self):
