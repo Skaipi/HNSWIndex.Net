@@ -148,7 +148,7 @@ namespace HNSWIndex
             if (EntryPoint.OutEdges[layer].Count > 0)
             {
                 int replacementId = -1;
-                int maxConnections = 0;
+                int maxConnections = -1;
                 for (int i = 0; i < EntryPoint.OutEdges[layer].Count; i++)
                 {
                     var neighborId = EntryPoint.OutEdges[layer].AsSpan()[i];
