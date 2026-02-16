@@ -6,7 +6,7 @@ namespace HNSWIndex
     {
         public List<LayerInfo> Layers;
 
-        internal HNSWInfo(Node[] nodes, ConcurrentQueue<int> removedNodes, int maxLayer, bool allowRemovals)
+        internal HNSWInfo(Node[] nodes, ConcurrentStack<int> removedNodes, int maxLayer, bool allowRemovals)
         {
             Layers = new List<LayerInfo>(maxLayer + 1);
             for (int layer = 0; layer <= maxLayer; layer++)

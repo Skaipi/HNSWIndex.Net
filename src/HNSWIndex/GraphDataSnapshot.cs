@@ -17,7 +17,7 @@ namespace HNSWIndex
         internal NestedArrayWrapper<TVector>[]? Items { get; set; }
 
         [ProtoMember(3)]
-        internal ConcurrentQueue<int>? RemovedIndexes { get; set; }
+        internal ConcurrentStack<int>? RemovedIndexes { get; set; }
 
         [ProtoMember(4)]
         internal int EntryPointId = -1;

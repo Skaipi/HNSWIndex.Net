@@ -16,7 +16,7 @@ namespace HNSWIndex
         internal object indexLock = new object();
         internal Node[] Nodes { get; private set; }
         internal TVector[] Items { get; private set; }
-        internal ConcurrentQueue<int> RemovedIndexes { get; private set; }
+        internal ConcurrentStack<int> RemovedIndexes { get; private set; }
         internal GraphRegionLocker GraphLocker;
         internal object entryPointLock = new object();
         internal int EntryPointId = -1;
@@ -45,7 +45,7 @@ namespace HNSWIndex
             allowRemovals = parameters.AllowRemovals;
             Capacity = parameters.CollectionSize;
 
-            RemovedIndexes = new ConcurrentQueue<int>();
+            RemovedIndexes = new ConcurrentStack<int>();
             Nodes = new Node[parameters.CollectionSize];
             Items = new TVector[parameters.CollectionSize];
             GraphLocker = new GraphRegionLocker(parameters.CollectionSize);
@@ -66,7 +66,7 @@ namespace HNSWIndex
             Nodes = snapshot.ParsedNodes ?? new Node[parameters.CollectionSize];
             Items = snapshot.ParsedItems ?? new TVector[parameters.CollectionSize];
             GraphLocker = new GraphRegionLocker(snapshot.Capacity);
-            RemovedIndexes = snapshot.RemovedIndexes ?? new ConcurrentQueue<int>();
+            RemovedIndexes = snapshot.RemovedIndexes ?? new ConcurrentStack<int>();
             EntryPointId = snapshot.EntryPointId;
             Capacity = snapshot.Capacity;
             Length = snapshot.Length;
@@ -82,7 +82,7 @@ namespace HNSWIndex
             if (topLayer < 0) return -1;
 
             // Search for empty spot first
-            if (allowRemovals && RemovedIndexes.TryDequeue(out int vacantId))
+            if (allowRemovals && RemovedIndexes.TryPop(out int vacantId))
             {
                 Nodes[vacantId] = NewNode(vacantId, topLayer);
                 Items[vacantId] = item;
@@ -123,7 +123,7 @@ namespace HNSWIndex
         internal void RemoveItem(int itemId)
         {
             Items[itemId] = default!;
-            RemovedIndexes.Enqueue(itemId);
+            RemovedIndexes.Push(itemId);
             Interlocked.Decrement(ref Count);
         }
 
