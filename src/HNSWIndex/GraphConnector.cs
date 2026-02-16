@@ -94,9 +94,8 @@ namespace HNSWIndex
                     localCandidates.Add(new NodeDistance<TDistance>(candidateId, data.Distance(candidateId, activeNodeId)));
                 }
 
-                //TODO: Maybe use heuristic fuction here
-                localCandidates.Sort(Heuristic<TDistance>.CloserFirst);
-                for (int j = 0; j < localCandidates.Count && activeNeighbours.Length < data.MaxEdges(layer); j++)
+                localCandidates.Sort(Heuristic<TDistance>.AscencingOrder);
+                for (int j = 0; j < localCandidates.Count; j++)
                 {
                     var candidate = localCandidates[j];
                     var candidateId = candidate.Id;

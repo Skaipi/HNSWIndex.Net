@@ -5,8 +5,7 @@ namespace HNSWIndex
 {
     public static class Heuristic<TDistance> where TDistance : struct, INumber<TDistance>, IMinMaxValue<TDistance>
     {
-        internal static DistanceComparer<TDistance> FartherFirst = new DistanceComparer<TDistance>();
-        internal static ReverseDistanceComparer<TDistance> CloserFirst = new ReverseDistanceComparer<TDistance>();
+        internal static DistanceComparer<TDistance> AscencingOrder = new DistanceComparer<TDistance>();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static EdgeList RelativeNeighborPruning(NodeDistance<TDistance>[] candidates, Func<int, int, TDistance> distanceFnc, int maxEdges)
@@ -20,7 +19,7 @@ namespace HNSWIndex
 
             var resultCount = 0;
             var resultList = new NodeDistance<TDistance>[maxEdges + 1];
-            Array.Sort(candidates, FartherFirst); // FarherFirst applies to heap ordering not sorting
+            Array.Sort(candidates, AscencingOrder);
             for (int i = 0; i < candidates.Length && resultCount < maxEdges; i++)
             {
                 // Make local copy to maybe improve performance
