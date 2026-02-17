@@ -23,7 +23,9 @@ namespace HNSWIndex
         internal Node EntryPoint => Nodes[EntryPointId];
         internal int Capacity;
         internal int Length = 0;
-        internal int Count = 0;
+        internal int Count => activeNodes.Count;
+        internal int[] ActiveIds => activeNodes.ActiveIds;
+        private ActiveSet activeNodes;
         private object rngLock = new object();
         private Random rng;
         private double distRate;
@@ -48,6 +50,7 @@ namespace HNSWIndex
             RemovedIndexes = new ConcurrentStack<int>();
             Nodes = new Node[parameters.CollectionSize];
             Items = new TVector[parameters.CollectionSize];
+            activeNodes = new ActiveSet(parameters.CollectionSize);
             GraphLocker = new GraphRegionLocker(parameters.CollectionSize);
         }
 
@@ -65,12 +68,12 @@ namespace HNSWIndex
 
             Nodes = snapshot.ParsedNodes ?? new Node[parameters.CollectionSize];
             Items = snapshot.ParsedItems ?? new TVector[parameters.CollectionSize];
+            activeNodes = new ActiveSet(snapshot.ActiveNodes ?? new int[0]);
             GraphLocker = new GraphRegionLocker(snapshot.Capacity);
             RemovedIndexes = snapshot.RemovedIndexes ?? new ConcurrentStack<int>();
             EntryPointId = snapshot.EntryPointId;
             Capacity = snapshot.Capacity;
             Length = snapshot.Length;
-            Count = snapshot.Count;
         }
 
         /// <summary>
@@ -86,7 +89,7 @@ namespace HNSWIndex
             {
                 Nodes[vacantId] = NewNode(vacantId, topLayer);
                 Items[vacantId] = item;
-                Interlocked.Increment(ref Count);
+                activeNodes.Add(vacantId);
                 return vacantId;
             }
 
@@ -105,14 +108,15 @@ namespace HNSWIndex
                     Nodes = nodes;
                     Items = items;
                     // Update other structures
+                    activeNodes.EnsureCapacity(Capacity);
                     Reallocated?.Invoke(this, new ReallocateEventArgs(Capacity));
                     GraphLocker.UpdateCapacity(Capacity);
                 }
                 Nodes[slotId] = NewNode(slotId, topLayer);
                 Items[slotId] = item;
+                activeNodes.Add(slotId);
             }
 
-            Interlocked.Increment(ref Count);
             return slotId;
         }
 
@@ -124,7 +128,7 @@ namespace HNSWIndex
         {
             Items[itemId] = default!;
             RemovedIndexes.Push(itemId);
-            Interlocked.Decrement(ref Count);
+            activeNodes.Remove(itemId);
         }
 
         /// <summary>

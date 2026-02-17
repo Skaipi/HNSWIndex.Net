@@ -100,14 +100,6 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Get list of items inserted into the graph structure
-        /// </summary>
-        public List<TVector> Items()
-        {
-            return data.Items.ToList();
-        }
-
-        /// <summary>
         /// Get K nearest neighbours of query point. 
         /// Optionally provide filter function to ignore certain labels.
         /// Layer parameters indicates at which layer search should be performed (0 - base layer)
@@ -225,6 +217,27 @@ namespace HNSWIndex
                 return new HNSWIndex<TVector, TDistance>(distFnc, snapshot);
             }
         }
+
+        /// <summary>
+        /// Get list of items inserted into the graph structure
+        /// </summary>
+        public List<TVector> Items()
+        {
+            return data.ActiveIds.Select(id => data.Items[id]).ToList();
+        }
+
+        /// <summary>
+        /// Get list of ids of items inserted into the graph structure
+        /// </summary>
+        public List<int> Ids()
+        {
+            return data.ActiveIds.ToList();
+        }
+
+        /// <summary>
+        /// Get the number of items in the graph structure.
+        /// </summary>
+        public int Count => data.Count;
 
         private KNNResult<TVector, TDistance> CandidateToResult(NodeDistance<TDistance> nodeDistance)
         {
