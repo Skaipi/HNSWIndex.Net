@@ -170,6 +170,29 @@ namespace HNSWIndex
         }
 
         /// <summary>
+        /// Force replace entry point with point at highest layer.
+        /// This requires scan through all active nodes.
+        /// </summary>
+        internal void ForceReplaceEntryPoint()
+        {
+            if (Count == 0) return;
+
+            int bestLayer = -1;
+            int bestId = -1;
+            var activeIds = ActiveIds;
+            for (int i = 0; i < Count; i++)
+            {
+                var candidate = Nodes[activeIds[i]];
+                if (candidate.MaxLayer > bestLayer)
+                {
+                    bestLayer = candidate.MaxLayer;
+                    bestId = candidate.Id;
+                }
+            }
+            EntryPointId = bestId;
+        }
+
+        /// <summary>
         /// Get the maximum layer of the graph.
         /// </summary>
         internal int GetTopLayer()

@@ -60,7 +60,11 @@ namespace HNSWIndex
                     if (item.Id == data.EntryPointId)
                     {
                         var replacementFound = data.TryReplaceEntryPoint(layer);
-                        if (!replacementFound && layer == 0) data.EntryPointId = -1;
+                        if (!replacementFound && layer == 0)
+                        {
+                            if (data.Count == 1) data.EntryPointId = -1; // Graph is now empty
+                            else data.ForceReplaceEntryPoint();
+                        }
                     }
                     RemoveConnectionsAtLayer(item, layer);
                     if (layer == 0) data.RemoveItem(item.Id); // Remove label before leaving locks
