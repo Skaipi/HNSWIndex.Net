@@ -191,7 +191,8 @@ namespace HNSWIndex
         /// </summary>
         public HNSWInfo GetInfo()
         {
-            return new HNSWInfo(data.Nodes, data.RemovedIndexes, data.GetTopLayer(), parameters.AllowRemovals);
+            var activeNodes = data.ActiveIds.Select(id => data.Nodes[id]).ToArray();
+            return new HNSWInfo(activeNodes, data.GetTopLayer(), parameters.AllowRemovals);
         }
 
         /// <summary>

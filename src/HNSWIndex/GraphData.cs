@@ -127,6 +127,7 @@ namespace HNSWIndex
         internal void RemoveItem(int itemId)
         {
             Items[itemId] = default!;
+            Nodes[itemId] = default!;
             RemovedIndexes.Push(itemId);
             activeNodes.Remove(itemId);
         }

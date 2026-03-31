@@ -6,12 +6,12 @@ namespace HNSWIndex
     {
         public List<LayerInfo> Layers;
 
-        internal HNSWInfo(Node[] nodes, ConcurrentStack<int> removedNodes, int maxLayer, bool allowRemovals)
+        internal HNSWInfo(Node[] nodes, int maxLayer, bool allowRemovals)
         {
             Layers = new List<LayerInfo>(maxLayer + 1);
             for (int layer = 0; layer <= maxLayer; layer++)
             {
-                Layers.Add(new LayerInfo(nodes.Where(x => x is not null && x.MaxLayer >= layer && !removedNodes.Contains(x.Id)).ToList(), layer, allowRemovals));
+                Layers.Add(new LayerInfo(nodes.Where(x => x.MaxLayer >= layer).ToList(), layer, allowRemovals));
             }
         }
 

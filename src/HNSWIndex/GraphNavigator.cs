@@ -95,12 +95,11 @@ namespace HNSWIndex
             while (candidates.Count > 0)
             {
                 // get next candidate to check and expand
-                var closestCandidate = candidates.Peek();
+                var closestCandidate = candidates.Pop();
                 if (closestCandidate.Dist > farthestResultDist && topCandidates.Count >= k)
                 {
                     break;
                 }
-                candidates.Pop(); // Delay heap reordering in case of early break 
 
                 var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer].AsSpan();
 
