@@ -100,7 +100,7 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Get K nearest neighbours of query point. 
+        /// Get K nearest neighbors of query point. 
         /// Optionally provide filter function to ignore certain labels.
         /// Layer parameters indicates at which layer search should be performed (0 - base layer)
         /// </summary>
@@ -112,11 +112,11 @@ namespace HNSWIndex
             if (filterFnc is not null)
                 indexFilter = (index) => filterFnc(data.Items[index]);
 
-            var neighboursAmount = Math.Max(parameters.MinNN, k);
+            var neighborsAmount = Math.Max(parameters.MinNN, k);
             var ep = navigator.FindEntryPoint(layer, query);
-            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighboursAmount, query, indexFilter);
+            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighborsAmount, query, indexFilter);
 
-            if (k < neighboursAmount)
+            if (k < neighborsAmount)
             {
                 return topCandidates.OrderBy(c => c.Dist).Take(k).ToList().ConvertAll(CandidateToResult);
             }
@@ -137,7 +137,7 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Get all neighbours of query point which are within range distance.
+        /// Get all neighbors of query point which are within range distance.
         /// Optionally provide filter function to ignore certain labels.
         /// Layer parameters indicates at which layer search should be performed (0 - base layer)
         /// </summary>

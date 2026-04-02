@@ -25,12 +25,12 @@ namespace HNSWIndex
         /// <summary>
         /// Acquire regional lock around node at specific layer
         /// </summary>
-        public IDisposable LockNodeNeighbourhood(Node node, int layer)
+        public IDisposable LockNodeNeighborhood(Node node, int layer)
         {
             while (true)
             {
                 // Get snapshot
-                if (!GetNeighbourhoodSnapshot(node, layer, out var s0)) continue;
+                if (!GetNeighborhoodSnapshot(node, layer, out var s0)) continue;
 
                 // Mark neighborhood as busy
                 // Adjacency of s0 cannot be modified after this
@@ -41,7 +41,7 @@ namespace HNSWIndex
                 }
 
                 // Take second version to validate neighborhood.
-                if (!GetNeighbourhoodSnapshot(node, layer, out var s1))
+                if (!GetNeighborhoodSnapshot(node, layer, out var s1))
                 {
                     Release(s0);
                     continue;
@@ -74,7 +74,7 @@ namespace HNSWIndex
         /// <summary>
         /// Collect ids of all neighbors of a node. Throw of this method is equivalent with returnning false.
         /// </summary>
-        private bool GetNeighbourhoodSnapshot(Node node, int layer, out int[] ids)
+        private bool GetNeighborhoodSnapshot(Node node, int layer, out int[] ids)
         {
             try
             {

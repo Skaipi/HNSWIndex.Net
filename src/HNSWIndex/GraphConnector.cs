@@ -151,16 +151,16 @@ namespace HNSWIndex
         internal int ConnectAtLayer(Node currNode, Node bestPeer, int layer)
         {
             var topCandidates = navigator.SearchLayer(bestPeer.Id, layer, parameters.MaxCandidates, data.Items[currNode.Id]);
-            var bestNeighboursIds = Heuristic<TDistance>.RelativeNeighborPruning(topCandidates, data.Distance, data.MaxEdges(layer));
+            var bestNeighborsIds = Heuristic<TDistance>.RelativeNeighborPruning(topCandidates, data.Distance, data.MaxEdges(layer));
             // lock is already acquired
-            currNode.OutEdges[layer] = bestNeighboursIds;
-            if (parameters.AllowRemovals) currNode.InEdges[layer] = new EdgeList(bestNeighboursIds);
+            currNode.OutEdges[layer] = bestNeighborsIds;
+            if (parameters.AllowRemovals) currNode.InEdges[layer] = new EdgeList(bestNeighborsIds);
 
-            var bestNeighboursIdsSpan = bestNeighboursIds.AsSpan();
-            for (int i = 0; i < bestNeighboursIds.Count; ++i)
+            var bestNeighborsIdsSpan = bestNeighborsIds.AsSpan();
+            for (int i = 0; i < bestNeighborsIds.Count; ++i)
             {
-                int newNeighbourId = bestNeighboursIdsSpan[i];
-                var neighbor = data.Nodes[newNeighbourId];
+                int newNeighborId = bestNeighborsIdsSpan[i];
+                var neighbor = data.Nodes[newNeighborId];
                 lock (neighbor.OutEdgesLock)
                 {
                     if (parameters.AllowRemovals)
@@ -177,7 +177,7 @@ namespace HNSWIndex
                 }
             }
 
-            return bestNeighboursIdsSpan[0];
+            return bestNeighborsIdsSpan[0];
         }
 
         /// <summary>

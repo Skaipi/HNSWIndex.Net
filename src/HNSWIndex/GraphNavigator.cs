@@ -101,19 +101,22 @@ namespace HNSWIndex
                     break;
                 }
 
-                var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer].AsSpan();
+                var candidateNode = data.Nodes[closestCandidate.Id];
 
-                for (int i = 0; i < neighboursIds.Length; ++i)
+                Monitor.Enter(candidateNode.OutEdgesLock);
+                var neighborsIds = candidateNode.OutEdges[layer].ToArray();
+                Monitor.Exit(candidateNode.OutEdgesLock);
+
+                for (int i = 0; i < neighborsIds.Length; ++i)
                 {
-                    int neighbourId = neighboursIds[i];
-                    if (visitedList.Contains(neighbourId)) continue;
+                    int neighborId = neighborsIds[i];
+                    if (visitedList.Contains(neighborId)) continue;
 
-                    var neighbourDistance = data.Distance(neighbourId, queryPoint);
-
-                    // enqueue perspective neighbours to expansion list
-                    if (topCandidates.Count < k || neighbourDistance < farthestResultDist)
+                    var neighborDistance = data.Distance(neighborId, queryPoint);
+                    // enqueue perspective neighbors to expansion list
+                    if (topCandidates.Count < k || neighborDistance < farthestResultDist)
                     {
-                        var selectedCandidate = new NodeDistance<TDistance>(neighbourId, neighbourDistance);
+                        var selectedCandidate = new NodeDistance<TDistance>(neighborId, neighborDistance);
                         candidates.Push(selectedCandidate);
 
                         if (filterFnc(selectedCandidate.Id))
@@ -127,7 +130,7 @@ namespace HNSWIndex
                     }
 
                     // update visited list
-                    visitedList.Add(neighbourId);
+                    visitedList.Add(neighborId);
                 }
             }
 
@@ -168,19 +171,19 @@ namespace HNSWIndex
                 }
                 candidates.Pop(); // Delay heap reordering in case of early break 
 
-                var neighboursIds = data.Nodes[closestCandidate.Id].OutEdges[layer].AsSpan();
+                var neighborsIds = data.Nodes[closestCandidate.Id].OutEdges[layer].AsSpan();
 
-                for (int i = 0; i < neighboursIds.Length; ++i)
+                for (int i = 0; i < neighborsIds.Length; ++i)
                 {
-                    int neighbourId = neighboursIds[i];
-                    if (visitedList.Contains(neighbourId)) continue;
+                    int neighborId = neighborsIds[i];
+                    if (visitedList.Contains(neighborId)) continue;
 
-                    var neighbourDistance = data.Distance(neighbourId, queryPoint);
+                    var neighborDistance = data.Distance(neighborId, queryPoint);
 
-                    // enqueue perspective neighbours to expansion list
-                    if (neighbourDistance <= range)
+                    // enqueue perspective neighbors to expansion list
+                    if (neighborDistance <= range)
                     {
-                        var selectedCandidate = new NodeDistance<TDistance>(neighbourId, neighbourDistance);
+                        var selectedCandidate = new NodeDistance<TDistance>(neighborId, neighborDistance);
                         candidates.Push(selectedCandidate);
 
                         if (filterFnc(selectedCandidate.Id))
@@ -194,7 +197,7 @@ namespace HNSWIndex
                     }
 
                     // update visited list
-                    visitedList.Add(neighbourId);
+                    visitedList.Add(neighborId);
                 }
             }
 
