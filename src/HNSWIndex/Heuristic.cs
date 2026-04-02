@@ -8,7 +8,7 @@ namespace HNSWIndex
         internal static DistanceComparer<TDistance> AscencingOrder = new DistanceComparer<TDistance>();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static EdgeList RelativeNeighborPruning(NodeDistance<TDistance>[] candidates, Func<int, int, TDistance> distanceFnc, int maxEdges)
+        internal static EdgeList RelativeNeighborPruning(Span<NodeDistance<TDistance>> candidates, Func<int, int, TDistance> distanceFnc, int maxEdges)
         {
             if (candidates.Length < maxEdges)
             {
@@ -19,7 +19,7 @@ namespace HNSWIndex
 
             var resultCount = 0;
             var resultList = new NodeDistance<TDistance>[maxEdges + 1];
-            Array.Sort(candidates, AscencingOrder);
+            MemoryExtensions.Sort(candidates, AscencingOrder);
             for (int i = 0; i < candidates.Length && resultCount < maxEdges; i++)
             {
                 // Make local copy to maybe improve performance
