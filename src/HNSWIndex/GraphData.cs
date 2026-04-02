@@ -30,7 +30,6 @@ namespace HNSWIndex
         private Random rng;
         private double distRate;
         private int maxEdges;
-        private bool zeroLayerGuaranteed;
         private bool allowRemovals;
         private Func<TVector, TVector, TDistance> distanceFnc;
 
@@ -43,7 +42,6 @@ namespace HNSWIndex
             rng = parameters.RandomSeed < 0 ? new Random() : new Random(parameters.RandomSeed);
             distRate = parameters.DistributionRate;
             maxEdges = parameters.MaxEdges;
-            zeroLayerGuaranteed = parameters.ZeroLayerGuaranteed;
             allowRemovals = parameters.AllowRemovals;
             Capacity = parameters.CollectionSize;
 
@@ -63,7 +61,6 @@ namespace HNSWIndex
             rng = parameters.RandomSeed < 0 ? new Random() : new Random(parameters.RandomSeed);
             distRate = parameters.DistributionRate;
             maxEdges = parameters.MaxEdges;
-            zeroLayerGuaranteed = parameters.ZeroLayerGuaranteed;
             allowRemovals = parameters.AllowRemovals;
 
             Nodes = snapshot.ParsedNodes ?? new Node[parameters.CollectionSize];
@@ -126,8 +123,6 @@ namespace HNSWIndex
         /// </summary>
         internal void RemoveItem(int itemId)
         {
-            Items[itemId] = default!;
-            Nodes[itemId] = default!;
             RemovedIndexes.Push(itemId);
             activeNodes.Remove(itemId);
         }
@@ -212,7 +207,7 @@ namespace HNSWIndex
             {
                 random = rng.NextSingle();
             }
-            return zeroLayerGuaranteed ? (int)(-Math.Log(random) * distRate) : (int)(-Math.Log(random) * distRate) - 1;
+            return (int)(-Math.Log(random) * distRate);
         }
 
         /// <summary>
