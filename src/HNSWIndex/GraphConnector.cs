@@ -114,7 +114,7 @@ namespace HNSWIndex
                 for (int j = 0; j < prunedCandidates.Length; j++)
                 {
                     var candidateId = prunedCandidates[j];
-                    if (candidateId == affectedNodeId || affectedNodeNeighbors.Contains(candidateId)) continue;
+                    if (affectedNodeNeighbors.Contains(candidateId)) continue;
 
                     var candidateNode = data.Nodes[candidateId];
                     var locked = candidateNode.NodeLock.TryEnterReadLock(0);
@@ -133,7 +133,7 @@ namespace HNSWIndex
 
                 if (activeNode.OutEdges[layer].Count > data.MaxEdges(layer))
                 {
-                    PruneOverflow(activeNode, layer);
+                    lock (activeNode.OutEdgesLock) PruneOverflow(activeNode, layer);
                 }
             }
             ArrayPool<NodeDistance<TDistance>>.Shared.Return(localCandidates);
@@ -205,7 +205,7 @@ namespace HNSWIndex
                 int cand = candidates[i];
                 candidatesDistances[i] = new NodeDistance<TDistance>(cand, data.Distance(cand, node.Id));
             }
-            newOut = Heuristic<TDistance>.RelativeNeighborPruning(candidatesDistances[0..candidates.Length], data.Distance, data.MaxEdges(layer));
+            newOut = Heuristic<TDistance>.RelativeNeighborPruning(candidatesDistances.AsSpan(0, candidates.Length), data.Distance, data.MaxEdges(layer));
             node.OutEdges[layer] = newOut;
 
             ArrayPool<NodeDistance<TDistance>>.Shared.Return(candidatesDistances);
