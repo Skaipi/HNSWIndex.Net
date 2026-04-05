@@ -237,6 +237,13 @@ public static unsafe class HNSWIndexExport
         catch (Exception ex) { SetError(ex); return -1; }
     }
 
+    [UnmanagedCallersOnly(EntryPoint = "hnsw_set_remove_max_candidates", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static int SetRemoveMaxCandidates(int maxCandidates)
+    {
+        try { _parameters.RemoveMaxCandidates = maxCandidates; return 0; }
+        catch (Exception ex) { SetError(ex); return -1; }
+    }
+
     [UnmanagedCallersOnly(EntryPoint = "hnsw_set_distribution_rate", CallConvs = new[] { typeof(CallConvCdecl) })]
     public static int SetDistributionRate(float distRate)
     {

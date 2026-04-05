@@ -34,7 +34,7 @@ namespace HNSWIndex
         /// Maximum number of nodes taken as candidates for neighbor check during removal
         /// </summary>
         [ProtoMember(5)]
-        public int RemoveMaxCandidates { get; set; } = 150;
+        public int RemoveMaxCandidates { get; set; } = 100;
 
         /// <summary>
         /// Expected amount of nodes in the graph.

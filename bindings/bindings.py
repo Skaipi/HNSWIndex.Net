@@ -100,6 +100,9 @@ lib.hnsw_set_max_edges.argtypes = [ct.c_int]
 lib.hnsw_set_max_candidates.restype = ct.c_int
 lib.hnsw_set_max_candidates.argtypes = [ct.c_int]
 
+lib.hnsw_set_remove_max_candidates.restype = ct.c_int
+lib.hnsw_set_remove_max_candidates.argtypes = [ct.c_int]
+
 lib.hnsw_set_distribution_rate.restype = ct.c_int
 lib.hnsw_set_distribution_rate.argtypes = [ct.c_float]
 
@@ -138,23 +141,45 @@ def _as_2d_f32(x: npt.ArrayLike, dim_expected=None):
 
 class Index:
     """
-    HNSW Index class for efficient nearest neighbor querying in high dimensional spaces.
-    Supported metrics:
-     - "sq_euclid"
-     - "cosine"
-     - "ucosine"
+    Python binding for a native HNSW index.
+
+    This class wraps the native ``HNSWIndex.Native`` library and exposes
+    batch insertion, removal, k-nearest-neighbor search, and radius search
+    for ``float32`` vectors of fixed dimensionality.
+
+    Parameters
+    ----------
+    dim : int
+        Dimensionality of all vectors stored in the index.
+    metric : {"sq_euclid", "cosine", "ucosine"}, default="sq_euclid"
+        Distance metric used by the native index.
+
+    Notes
+    -----
+    The native index is created lazily on first insertion. Configuration
+    setters must therefore be called before the first operation that
+    initializes the underlying native structure.
 
     Examples
     --------
-    >>> # Squared Euclidean distance by default
     >>> index = Index(dim=128, metric="sq_euclid")
-    >>> vectors = np.random.rand(2_000, 128)
     >>> index.set_collection_size(2000)
-    >>> ids = index.add(vectors)
-    >>> results = index.knn_query(vectors, k=1)
+    >>> x = np.random.rand(2000, 128).astype(np.float32)
+    >>> ids = index.add(x)
+    >>> nn_ids, nn_dists = index.knn_query(x[:10], k=5)
     """
 
     def __init__(self, dim: int, metric="sq_euclid"):
+        """
+        Create an uninitialized index wrapper.
+
+        Parameters
+        ----------
+        dim : int
+            Dimensionality of vectors accepted by this index.
+        metric : {"sq_euclid", "cosine", "ucosine"}, default="sq_euclid"
+            Distance metric used for indexing and querying.
+        """
         self.dim = dim
         self.metric = metric
         self._initialized = False
@@ -174,9 +199,25 @@ class Index:
 
     def set_collection_size(self, init_size: int):
         """
-        Set expected number of elements in index to improve efficiency.
+        Set the expected number of elements in the index.
 
-        All parameter setters will throw if used on initialized index.
+        Providing this estimate allows the native implementation to allocate
+        internal storage more efficiently before construction begins.
+
+        Parameters
+        ----------
+        init_size : int
+            Expected number of vectors to be inserted.
+
+        Raises
+        ------
+        RuntimeError
+            If the native library rejects the value or the index has already
+            been initialized.
+
+        Notes
+        -----
+        This setter must be called before the native index is initialized.
         """
         status = lib.hnsw_set_collection_size(init_size)
         if status < 0:
@@ -184,9 +225,25 @@ class Index:
 
     def set_max_edges(self, max_conn: int):
         """
-        Set maximum number of connections per node. This may improve search quality at the cost of memory usage.
+        Set the maximum number of outgoing connections per node.
 
-        All parameter setters will throw if used on initialized index.
+        Larger values generally improve recall at the cost of higher memory
+        use and slower construction.
+
+        Parameters
+        ----------
+        max_conn : int
+            Maximum number of graph neighbors maintained for each node.
+
+        Raises
+        ------
+        RuntimeError
+            If the native library rejects the value or the index has already
+            been initialized.
+
+        Notes
+        -----
+        This setter must be called before the native index is initialized.
         """
         status = lib.hnsw_set_max_edges(max_conn)
         if status < 0:
@@ -194,19 +251,74 @@ class Index:
 
     def set_max_candidates(self, max_candidates: int):
         """
-        Set the size of candidate lists considered during graph construction. This may affect construction time.
+        Set the candidate-list size used during graph construction.
 
-        All parameter setters will throw if used on initialized index.
+        Larger values typically improve index quality but increase build time.
+
+        Parameters
+        ----------
+        max_candidates : int
+            Number of candidate neighbors examined while inserting elements.
+
+        Raises
+        ------
+        RuntimeError
+            If the native library rejects the value or the index has already
+            been initialized.
+
+        Notes
+        -----
+        This setter must be called before the native index is initialized.
         """
         status = lib.hnsw_set_max_candidates(max_candidates)
         if status < 0:
             raise RuntimeError(_last_error())
 
+    def set_remove_max_candidates(self, rem_max_candidates: int):
+        """
+        Set the candidate-list size used when repairing the graph after removal.
+
+        Parameters
+        ----------
+        rem_max_candidates : int
+            Number of candidates considered when reconnecting the graph after
+            deleting nodes.
+
+        Raises
+        ------
+        RuntimeError
+            If the native library rejects the value or the index has already
+            been initialized.
+
+        Notes
+        -----
+        This setter must be called before the native index is initialized.
+        """
+        status = lib.hnsw_set_remove_max_candidates(rem_max_candidates)
+        if status < 0:
+            raise RuntimeError(_last_error())
+
     def set_distribution_rate(self, dist_rate: float):
         """
-        Set distribution rate for promoting elements to higher layers of the graph.
+        Set the layer-promotion rate used by the HNSW hierarchy.
 
-        All parameter setters will throw if used on initialized index.
+        This value controls how aggressively elements are promoted to upper
+        layers of the graph.
+
+        Parameters
+        ----------
+        dist_rate : float
+            Distribution parameter for level assignment in the native index.
+
+        Raises
+        ------
+        RuntimeError
+            If the native library rejects the value or the index has already
+            been initialized.
+
+        Notes
+        -----
+        This setter must be called before the native index is initialized.
         """
         status = lib.hnsw_set_distribution_rate(dist_rate)
         if status < 0:
@@ -214,9 +326,22 @@ class Index:
 
     def set_random_seed(self, random_seed: int):
         """
-        Set the PRNG seed used by the native algorithm.
+        Set the random seed used by the native implementation.
 
-        All parameter setters will throw if used on initialized index.
+        Parameters
+        ----------
+        random_seed : int
+            Seed for randomized parts of index construction.
+
+        Raises
+        ------
+        RuntimeError
+            If the native library rejects the value or the index has already
+            been initialized.
+
+        Notes
+        -----
+        This setter must be called before the native index is initialized.
         """
         status = lib.hnsw_set_random_seed(random_seed)
         if status < 0:
@@ -224,29 +349,80 @@ class Index:
 
     def set_min_nn(self, min_nn: int):
         """
-        Set minimum number of elements retrieved by query.
-        If k is less than min_nn parameter then k best elements are returned and remaining elements are discarded.
+        Set the minimum internal neighbor count used by the native search code.
 
-        All parameter setters will throw if used on initialized index.
+        Parameters
+        ----------
+        min_nn : int
+            Minimum number of neighbors the native implementation considers
+            internally during querying.
+
+        Raises
+        ------
+        RuntimeError
+            If the native library rejects the value or the index has already
+            been initialized.
+
+        Notes
+        -----
+        This setter must be called before the native index is initialized.
         """
         status = lib.hnsw_set_min_nn(min_nn)
         if status < 0:
             raise RuntimeError(_last_error())
 
-    def set_allow_removals(self, allowRemovals: bool):
+    def set_allow_removals(self, allow_removals: bool):
         """
-        Set flag which enables removal from hnsw structure.
-        By default set to `True`.
-        Setting this to `False` may improve memory footprint and construction time.
+        Enable or disable support for removing indexed elements.
+
+        Disabling removals may reduce memory use and improve construction
+        performance if deletions are never needed.
+
+        Parameters
+        ----------
+        allowRemovals : bool
+            Whether the index should support element removal.
+
+        Raises
+        ------
+        RuntimeError
+            If the native library rejects the value or the index has already
+            been initialized.
+
+        Notes
+        -----
+        This setter must be called before the native index is initialized.
         """
-        status = lib.hnsw_set_allow_removals(allowRemovals)
+        status = lib.hnsw_set_allow_removals(allow_removals)
         if status < 0:
             raise RuntimeError(_last_error())
 
     def add(self, vecs: npt.ArrayLike) -> npt.NDArray[np.int32]:
         """
-        Batch add vectors to hnsw index.
-        Each vector should be represented as list of floating point values
+        Add an array of vectors to the index.
+
+        Parameters
+        ----------
+        vecs : array-like of shape (n_vectors, dim) or (dim,)
+            Input vectors. Values are converted to contiguous ``float32``.
+
+        Returns
+        -------
+        ndarray of shape (n_vectors,), dtype=int32
+            Native integer identifiers assigned to the inserted vectors.
+
+        Raises
+        ------
+        ValueError
+            If the input cannot be interpreted as a 2D array of shape
+            ``(n_vectors, self.dim)``.
+        RuntimeError
+            If insertion fails in the native library.
+
+        Notes
+        -----
+        Calling this method initializes the underlying native index if it has
+        not been created yet.
         """
         if not self._initialized:
             self.__initialize()
@@ -266,7 +442,23 @@ class Index:
 
     def remove(self, ids: npt.ArrayLike) -> None:
         """
-        Batch remove elements from hnsw index.
+        Remove an array of elements by identifier.
+
+        Parameters
+        ----------
+        ids : array-like of int
+            Integer identifiers previously returned by ``add``.
+
+        Raises
+        ------
+        RuntimeError
+            If removal fails in the native library.
+
+        Notes
+        -----
+        An empty input is ignored.
+
+        This method assumes the native index has already been initialized.
         """
         arr = np.asarray(ids, dtype=np.int32).ravel()
         if arr.size == 0:
@@ -283,7 +475,33 @@ class Index:
         self, queries: npt.ArrayLike, k: int
     ) -> Tuple[npt.NDArray[np.int32], npt.NDArray[np.float32]]:
         """
-        Perform batch knn query for provided list of query vectors.
+        Perform batched k-nearest-neighbor search.
+
+        Parameters
+        ----------
+        queries : array-like of shape (n_queries, dim) or (dim,)
+            Query vectors. Values are converted to contiguous ``float32``.
+        k : int
+            Number of nearest neighbors to return for each query.
+
+        Returns
+        -------
+        ids : ndarray of shape (n_queries, k), dtype=int32
+            Neighbor identifiers for each query.
+        dists : ndarray of shape (n_queries, k), dtype=float32
+            Distances corresponding to ``ids``.
+
+        Raises
+        ------
+        ValueError
+            If the query array does not have shape ``(n_queries, self.dim)``.
+        RuntimeError
+            If the query fails in the native library.
+
+        Notes
+        -----
+        This method assumes the native index has already been initialized and
+        populated with data.
         """
         q = _as_2d_f32(queries, self.dim)
         n = int(q.shape[0])
@@ -306,7 +524,38 @@ class Index:
         self, queries: npt.ArrayLike, query_range: float
     ) -> Tuple[List[npt.NDArray[np.int32]], List[npt.NDArray[np.float32]]]:
         """
-        Perform batch range query for provided list of query vectors.
+        Perform batched radius search.
+
+        Parameters
+        ----------
+        queries : array-like of shape (n_queries, dim) or (dim,)
+            Query vectors. Values are converted to contiguous ``float32``.
+        query_range : float
+            Maximum distance threshold. All indexed elements within this radius
+            are returned for each query.
+
+        Returns
+        -------
+        ids : list of ndarray
+            ``ids[i]`` contains the identifiers of all neighbors within
+            ``query_range`` for query ``i``.
+        dists : list of ndarray
+            ``dists[i]`` contains the corresponding distances for query ``i``.
+
+        Raises
+        ------
+        ValueError
+            If the query array does not have shape ``(n_queries, self.dim)``.
+        RuntimeError
+            If the query fails in the native library.
+
+        Notes
+        -----
+        Result counts may differ between queries, so results are returned as
+        per-query arrays rather than a single 2D array.
+
+        This method assumes the native index has already been initialized and
+        populated with data.
         """
         q = _as_2d_f32(queries, self.dim)
         n = int(q.shape[0])
