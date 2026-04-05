@@ -521,7 +521,7 @@ class Index:
         return ids.copy(), dists.copy()
 
     def range_query(
-        self, queries: npt.ArrayLike, query_range: float
+        self, queries: npt.ArrayLike, radius: float
     ) -> Tuple[List[npt.NDArray[np.int32]], List[npt.NDArray[np.float32]]]:
         """
         Perform batched radius search.
@@ -530,7 +530,7 @@ class Index:
         ----------
         queries : array-like of shape (n_queries, dim) or (dim,)
             Query vectors. Values are converted to contiguous ``float32``.
-        query_range : float
+        radius: float
             Maximum distance threshold. All indexed elements within this radius
             are returned for each query.
 
@@ -538,7 +538,7 @@ class Index:
         -------
         ids : list of ndarray
             ``ids[i]`` contains the identifiers of all neighbors within
-            ``query_range`` for query ``i``.
+            ``radius`` for query ``i``.
         dists : list of ndarray
             ``dists[i]`` contains the corresponding distances for query ``i``.
 
@@ -569,7 +569,7 @@ class Index:
             q.ctypes.data_as(ct.POINTER(ct.c_float)),
             n,
             self.dim,
-            query_range,
+            radius,
             ids_pp,
             dists_pp,
             counts,
