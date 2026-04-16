@@ -114,7 +114,7 @@ namespace HNSWIndex
 
             var neighborsAmount = Math.Max(parameters.MinNN, k);
             var ep = navigator.FindEntryPoint(layer, query);
-            var topCandidates = navigator.SearchLayer(ep.Id, layer, neighborsAmount, query, indexFilter);
+            var topCandidates = navigator.SearchLayerQuery(ep.Id, layer, neighborsAmount, query, indexFilter);
 
             if (k < neighborsAmount)
             {
@@ -179,7 +179,7 @@ namespace HNSWIndex
             var result = new List<KNNResult<TVector, TDistance>>[Math.Min(ep.MaxLayer, maxLayer) + 1];
             for (int layer = Math.Min(ep.MaxLayer, maxLayer); layer >= minLayer; layer--)
             {
-                var candidates = navigator.SearchLayer(ep.Id, layer, k, query).OrderBy(c => c.Dist).ToList();
+                var candidates = navigator.SearchLayerQuery(ep.Id, layer, k, query).OrderBy(c => c.Dist).ToList();
                 ep = data.Nodes[candidates[0].Id];
                 result[layer] = candidates.Count > 1 ? candidates[1..].ConvertAll(CandidateToResult) : new();
             }

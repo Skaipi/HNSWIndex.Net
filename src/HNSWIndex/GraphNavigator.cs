@@ -70,7 +70,7 @@ namespace HNSWIndex
         /// <summary>
         /// Perform search for k closest neighbors to queryPoint at given layer.
         /// Search starts at entry point. Some points may be excluded from search with filter funcion.
-        /// Default lock in this method is in writer mode.
+        /// Search is protected against concurrent modifications.
         /// </summary>
         internal NodeDistance<TDistance>[] SearchLayer(int entryPointId, int layer, int k, TVector queryPoint, Func<int, bool>? filterFnc = null)
         {
@@ -103,9 +103,77 @@ namespace HNSWIndex
 
                 var candidateNode = data.Nodes[closestCandidate.Id];
 
-                Monitor.Enter(candidateNode.OutEdgesLock);
-                var neighborsIds = candidateNode.OutEdges[layer].ToArray();
-                Monitor.Exit(candidateNode.OutEdgesLock);
+                lock (candidateNode.OutEdgesLock)
+                {
+                    var neighborsIds = candidateNode.OutEdges[layer].AsSpan();
+
+                    for (int i = 0; i < neighborsIds.Length; ++i)
+                    {
+                        int neighborId = neighborsIds[i];
+                        if (visitedList.Contains(neighborId)) continue;
+
+                        var neighborDistance = data.Distance(neighborId, queryPoint);
+                        // enqueue perspective neighbors to expansion list
+                        if (topCandidates.Count < k || neighborDistance < farthestResultDist)
+                        {
+                            var selectedCandidate = new NodeDistance<TDistance>(neighborId, neighborDistance);
+                            candidates.Push(selectedCandidate);
+
+                            if (filterFnc(selectedCandidate.Id))
+                                topCandidates.Push(selectedCandidate);
+
+                            if (topCandidates.Count > k)
+                                topCandidates.Pop();
+
+                            if (topCandidates.Count > 0)
+                                farthestResultDist = topCandidates.Peek().Dist;
+                        }
+
+                        // update visited list
+                        visitedList.Add(neighborId);
+                    }
+                }
+            }
+
+            pool.ReleaseVisitedList(visitedList);
+
+            return topCandidates.ToArray();
+        }
+
+        /// <summary>
+        /// Search without protection against concurrent modifications.
+        /// </summary>
+        internal NodeDistance<TDistance>[] SearchLayerQuery(int entryPointId, int layer, int k, TVector queryPoint, Func<int, bool>? filterFnc = null)
+        {
+            filterFnc ??= noFilter;
+            var topCandidates = new BinaryHeap<NodeDistance<TDistance>, DistanceComparer<TDistance>>(k, fartherFirst);
+            var candidates = new BinaryHeap<NodeDistance<TDistance>, ReverseDistanceComparer<TDistance>>(k * 2, closerFirst);
+
+            var entry = new NodeDistance<TDistance>(entryPointId, data.Distance(entryPointId, queryPoint));
+            var farthestResultDist = TDistance.MaxValue;
+
+            if (filterFnc(entryPointId))
+            {
+                topCandidates.Push(entry);
+                farthestResultDist = entry.Dist;
+            }
+
+            candidates.Push(entry);
+            var visitedList = pool.GetFreeVisitedList();
+            visitedList.Add(entryPointId);
+
+            // run bfs
+            while (candidates.Count > 0)
+            {
+                // get next candidate to check and expand
+                var closestCandidate = candidates.Pop();
+                if (closestCandidate.Dist > farthestResultDist && topCandidates.Count >= k)
+                {
+                    break;
+                }
+
+                var candidateNode = data.Nodes[closestCandidate.Id];
+                var neighborsIds = candidateNode.OutEdges[layer].AsSpan();
 
                 for (int i = 0; i < neighborsIds.Length; ++i)
                 {
@@ -139,8 +207,10 @@ namespace HNSWIndex
             return topCandidates.ToArray();
         }
 
-        // TODO: Merge this method with SearchLayer
-        // Maybe using proper filter function that checks distance range as well
+        /// <summary>
+        /// Range based search for neighbors to queryPoint at given layer.
+        /// Use in stateless search as it lacks locking and is not protected against concurrent modifications.
+        /// </summary>
         internal NodeDistance<TDistance>[] SearchLayerRange(int entryPointId, int layer, TDistance range, TVector queryPoint, Func<int, bool>? filterFnc = null)
         {
             filterFnc ??= noFilter;

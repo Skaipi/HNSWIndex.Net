@@ -76,6 +76,8 @@ namespace HNSWIndex
         /// </summary>
         private bool GetNeighborhoodSnapshot(Node node, int layer, out int[] ids)
         {
+            //TODO: Implement version controll independent of foreach and replace try/catch retry mechanism.
+            // Version controll in foreach detects concurrent modifications to adjacency lists. If detected, we just retry.
             try
             {
                 var outs = node.OutEdges[layer].AsSpan();
