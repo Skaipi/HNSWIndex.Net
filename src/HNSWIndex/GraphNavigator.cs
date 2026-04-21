@@ -22,10 +22,21 @@ namespace HNSWIndex
 
         /// <summary>
         /// Find entry point for qury search at specified layer.
-        /// Default locking is in writer mode and can be changed.
         /// Optional filter function can discriminate specific candidates. 
         /// </summary>
         internal Node FindEntryPoint(int dstLayer, TVector query, Func<int, bool>? filterFnc = null)
+        {
+            var bestPeer = data.EntryPoint;
+            for (int layer = bestPeer.MaxLayer; layer > dstLayer; layer--)
+                bestPeer = FindEntryAtLayer(layer, bestPeer, query, filterFnc);
+            return bestPeer;
+        }
+
+        /// <summary>
+        /// Find entry point for qury search at specified layer without locking.
+        /// Optional filter function can discriminate specific candidates. 
+        /// </summary>
+        internal Node FindEntryPointQuery(int dstLayer, TVector query, Func<int, bool>? filterFnc = null)
         {
             var bestPeer = data.EntryPoint;
             for (int layer = bestPeer.MaxLayer; layer > dstLayer; layer--)
@@ -38,6 +49,43 @@ namespace HNSWIndex
         /// Filter funtion discriminates certain solution.
         /// </summary>
         internal Node FindEntryAtLayer(int layer, Node startNode, TVector query, Func<int, bool>? filterFnc = null)
+        {
+            filterFnc ??= noLayerFilter;
+
+            var bestPeer = startNode;
+            var bestPeerCandidate = bestPeer;
+            var currDist = data.Distance(bestPeerCandidate.Id, query);
+
+            bool changed = true;
+            while (changed)
+            {
+                changed = false;
+                lock (bestPeerCandidate.OutEdgesLock)
+                {
+                    var connections = bestPeerCandidate.OutEdges[layer].AsSpan();
+
+                    for (int i = 0; i < connections.Length; i++)
+                    {
+                        int candidateId = connections[i];
+                        var d = data.Distance(candidateId, query);
+                        if (d < currDist)
+                        {
+                            currDist = d;
+                            bestPeerCandidate = data.Nodes[candidateId];
+                            if (filterFnc(candidateId)) bestPeer = bestPeerCandidate;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            return bestPeer;
+        }
+
+        /// <summary>
+        /// Search for best entry point at specific layer without locking.
+        /// Filter funtion discriminates certain solution.
+        /// </summary>
+        internal Node FindEntryAtLayerQuery(int layer, Node startNode, TVector query, Func<int, bool>? filterFnc = null)
         {
             filterFnc ??= noLayerFilter;
 

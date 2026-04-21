@@ -113,7 +113,7 @@ namespace HNSWIndex
                 indexFilter = (index) => filterFnc(data.Items[index]);
 
             var neighborsAmount = Math.Max(parameters.MinNN, k);
-            var ep = navigator.FindEntryPoint(layer, query);
+            var ep = navigator.FindEntryPointQuery(layer, query);
             var topCandidates = navigator.SearchLayerQuery(ep.Id, layer, neighborsAmount, query, indexFilter);
 
             if (k < neighborsAmount)
@@ -149,7 +149,7 @@ namespace HNSWIndex
             if (filterFnc is not null)
                 indexFilter = (index) => filterFnc(data.Items[index]);
 
-            var ep = navigator.FindEntryPoint(layer, query);
+            var ep = navigator.FindEntryPointQuery(layer, query);
             var topCandidates = navigator.SearchLayerRange(ep.Id, layer, range, query, indexFilter);
             return topCandidates.OrderBy(c => c.Dist).ToList().ConvertAll(CandidateToResult);
         }
@@ -175,7 +175,7 @@ namespace HNSWIndex
             // TODO: Add checks for invalid max and min layer
             if (data.Count <= 0 || k < 1) return [];
 
-            var ep = data.EntryPoint.MaxLayer >= maxLayer ? navigator.FindEntryPoint(maxLayer, query) : data.EntryPoint;
+            var ep = data.EntryPoint.MaxLayer >= maxLayer ? navigator.FindEntryPointQuery(maxLayer, query) : data.EntryPoint;
             var result = new List<KNNResult<TVector, TDistance>>[Math.Min(ep.MaxLayer, maxLayer) + 1];
             for (int layer = Math.Min(ep.MaxLayer, maxLayer); layer >= minLayer; layer--)
             {
