@@ -324,6 +324,100 @@ namespace HNSWIndex
             return topCandidates.ToArray();
         }
 
+        /// <summary>
+        /// Count weakly connected components at each layer.
+        /// Returned array is indexed by layer id starting from zero.
+        /// </summary>
+        internal int[] GetConnectedComponentCounts()
+        {
+            if (data.Count == 0) return [];
+
+            var activeIds = data.ActiveIdsSnapshot();
+            if (activeIds.Length == 0) return [];
+
+            int topLayer = data.GetTopLayer();
+            var counts = new int[topLayer + 1];
+
+            for (int layer = 0; layer <= topLayer; layer++)
+            {
+                var nodesOnLayer = activeIds.Where(id => data.Nodes[id].MaxLayer >= layer).ToArray();
+                counts[layer] = CountWeaklyConnectedComponentsAtLayer(nodesOnLayer, layer);
+            }
+
+            return counts;
+        }
+
+        private int CountWeaklyConnectedComponentsAtLayer(int[] nodesOnLayer, int layer)
+        {
+            if (nodesOnLayer.Length == 0) return 0;
+
+            var nodesOnLayerSet = new HashSet<int>(nodesOnLayer);
+            var outgoingEdges = new Dictionary<int, int[]>(nodesOnLayer.Length);
+            var incomingEdges = new Dictionary<int, List<int>>(nodesOnLayer.Length);
+
+            for (int i = 0; i < nodesOnLayer.Length; i++)
+            {
+                int nodeId = nodesOnLayer[i];
+                var node = data.Nodes[nodeId];
+
+                int[] neighbors;
+                lock (node.OutEdgesLock)
+                {
+                    neighbors = node.OutEdges[layer].ToArray();
+                }
+
+                outgoingEdges[nodeId] = neighbors;
+                for (int j = 0; j < neighbors.Length; j++)
+                {
+                    int neighborId = neighbors[j];
+                    if (!nodesOnLayerSet.Contains(neighborId)) continue;
+
+                    if (!incomingEdges.TryGetValue(neighborId, out var incoming))
+                    {
+                        incoming = new List<int>();
+                        incomingEdges[neighborId] = incoming;
+                    }
+
+                    incoming.Add(nodeId);
+                }
+            }
+
+            int componentCount = 0;
+            var visited = new HashSet<int>(nodesOnLayer.Length);
+            var frontier = new Queue<int>();
+
+            for (int i = 0; i < nodesOnLayer.Length; i++)
+            {
+                int startNodeId = nodesOnLayer[i];
+                if (!visited.Add(startNodeId)) continue;
+
+                componentCount++;
+                frontier.Enqueue(startNodeId);
+
+                while (frontier.Count > 0)
+                {
+                    int nodeId = frontier.Dequeue();
+
+                    var outgoing = outgoingEdges[nodeId];
+                    for (int j = 0; j < outgoing.Length; j++)
+                    {
+                        int neighborId = outgoing[j];
+                        if (!nodesOnLayerSet.Contains(neighborId)) continue;
+                        if (visited.Add(neighborId)) frontier.Enqueue(neighborId);
+                    }
+
+                    if (!incomingEdges.TryGetValue(nodeId, out var incoming)) continue;
+                    for (int j = 0; j < incoming.Count; j++)
+                    {
+                        int neighborId = incoming[j];
+                        if (visited.Add(neighborId)) frontier.Enqueue(neighborId);
+                    }
+                }
+            }
+
+            return componentCount;
+        }
+
         internal void OnReallocate(int newCapacity)
         {
             pool.Resize(newCapacity);

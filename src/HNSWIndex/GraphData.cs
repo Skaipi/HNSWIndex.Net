@@ -197,6 +197,14 @@ namespace HNSWIndex
         }
 
         /// <summary>
+        /// Get stable snapshot of active node ids.
+        /// </summary>
+        internal int[] ActiveIdsSnapshot()
+        {
+            return activeNodes.Snapshot();
+        }
+
+        /// <summary>
         /// Take random layer based on parameter's distribution rate.
         /// If ZeroLayerGuaranteed flag is set then all points should be at least at layer zero.
         /// </summary>

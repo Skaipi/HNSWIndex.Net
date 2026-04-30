@@ -196,6 +196,15 @@ namespace HNSWIndex
         }
 
         /// <summary>
+        /// Get the number of weakly connected components at each layer of the graph.
+        /// The returned array is indexed by layer id, starting at layer zero.
+        /// </summary>
+        public int[] GetConnectedComponentCounts()
+        {
+            return navigator.GetConnectedComponentCounts();
+        }
+
+        /// <summary>
         /// Serialize the graph snapshot image to a file.
         /// </summary>
         public void Serialize(string filePath)

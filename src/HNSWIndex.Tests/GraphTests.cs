@@ -214,7 +214,7 @@
             var evenVectors = evenIndexedVectors.ConvertAll(v => v.Label);
             var removalRecall = Utils.Recall(index, evenVectors, evenVectors);
 
-            Assert.IsTrue(insertRecall * 0.9 < removalRecall);
+            Assert.IsTrue(insertRecall * 0.98 < removalRecall);
 
             // Ensure in and out edges are balanced
             var info = index.GetInfo();
@@ -241,6 +241,35 @@
             var batchResults = index.BatchRangeQuery(vectors, range);
             foreach (var results in batchResults)
                 Assert.IsTrue(results.All(r => r.Distance <= range));
+        }
+
+        [TestMethod]
+        public void ConnectedComponentCountsEmptyGraphTest()
+        {
+            var index = new HNSWIndex<float[], float>(Metrics.CosineMetric.UnitCompute);
+            CollectionAssert.AreEqual(Array.Empty<int>(), index.GetConnectedComponentCounts());
+        }
+
+        [TestMethod]
+        public void ConnectedComponentCountsPerLayerTest()
+        {
+            Assert.IsNotNull(vectors);
+
+            var parameters = new HNSWParameters<float> { RandomSeed = 12345 };
+            var index = new HNSWIndex<float[], float>(Metrics.CosineMetric.UnitCompute, parameters);
+
+            for (int i = 0; i < 256; i++)
+            {
+                Utils.Normalize(vectors[i]);
+                index.Add(vectors[i]);
+            }
+
+            var counts = index.GetConnectedComponentCounts();
+            Assert.IsTrue(counts.Length >= 1);
+            foreach (var count in counts)
+            {
+                Assert.AreEqual(1, count);
+            }
         }
     }
 }
