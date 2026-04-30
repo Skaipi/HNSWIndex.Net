@@ -89,54 +89,81 @@ namespace HNSWIndex
         /// </summary>
         private void RemoveConnectionsAtLayer(Node removedNode, int layer)
         {
+            int maxEdges = data.MaxEdges(layer);
             DetachOutgoingReferences(removedNode, layer);
 
             var affectedNodes = removedNode.InEdges[layer].ToArray();
             var searchCandidates = navigator.SearchLayer(removedNode.Id, layer, parameters.RemoveMaxCandidates, data.Items[removedNode.Id], id => id != removedNode.Id);
-            var localCandidates = ArrayPool<NodeDistance<TDistance>>.Shared.Rent(searchCandidates.Length);
+            var candidateDistances = ArrayPool<NodeDistance<TDistance>>.Shared.Rent(searchCandidates.Length + maxEdges);
+            var oldSeen = new HashSet<int>(maxEdges);
+            var newSeen = new HashSet<int>(maxEdges);
             for (int i = 0; i < affectedNodes.Length; i++)
             {
                 var affectedNodeId = affectedNodes[i];
-                var activeNode = data.Nodes[affectedNodeId];
-                RemoveOutEdge(activeNode, removedNode, layer);
-                var affectedNodeNeighbors = activeNode.OutEdges[layer].AsSpan();
+                var affectedNode = data.Nodes[affectedNodeId];
+                RemoveOutEdge(affectedNode, removedNode, layer);
+                var affectedNodeNeighbors = affectedNode.OutEdges[layer].AsSpan();
+                oldSeen.Clear();
+                newSeen.Clear();
 
-                var candidatesCount = 0;
+                var oldCount = affectedNodeNeighbors.Length;
+                var oldIds = new int[oldCount];
+                affectedNode.OutEdges[layer].AsSpan().CopyTo(oldIds);
+
+                int candidateCount = 0;
+                // Add existing neighbors.
+                for (int j = 0; j < oldCount; j++)
+                {
+                    int id = oldIds[j];
+                    candidateDistances[candidateCount++] = new NodeDistance<TDistance>(id, data.Distance(id, affectedNodeId));
+                    oldSeen.Add(id);
+                }
+
+                // Add search candidates, deduplicated against old neighbors and previous candidates.
                 for (int j = 0; j < searchCandidates.Length; j++)
                 {
                     var candidateId = searchCandidates[j].Id;
                     if (candidateId == affectedNodeId) continue;
-                    localCandidates[candidatesCount++] = new NodeDistance<TDistance>(candidateId, data.Distance(candidateId, affectedNodeId));
+                    if (oldSeen.Contains(candidateId)) continue;
+                    candidateDistances[candidateCount++] = new NodeDistance<TDistance>(candidateId, data.Distance(candidateId, affectedNodeId));
                 }
 
-                var localCandidatesView = localCandidates.AsSpan(0, candidatesCount);
-                var prunedCandidates = Heuristic<TDistance>.RelativeNeighborPruning(localCandidatesView, data.Distance, data.MaxEdges(layer)).AsSpan();
-                for (int j = 0; j < prunedCandidates.Length; j++)
-                {
-                    var candidateId = prunedCandidates[j];
-                    if (affectedNodeNeighbors.Contains(candidateId)) continue;
+                var newOut = Heuristic<TDistance>.RelativeNeighborPruning(candidateDistances.AsSpan(0, candidateCount), data.Distance, maxEdges).AsSpan();
+                for (int j = 0; j < newOut.Length; j++) { newSeen.Add(newOut[j]); }
 
-                    var candidateNode = data.Nodes[candidateId];
-                    var locked = candidateNode.NodeLock.TryEnterReadLock(0);
+                // Remove references for old neighbors no longer present.
+                for (int j = 0; j < oldCount; j++)
+                {
+                    var oldNeighborId = oldIds[j];
+                    if (newSeen.Contains(oldNeighborId)) continue;
+
+                    var oldNeighbor = data.Nodes[oldNeighborId];
+                    lock (affectedNode.OutEdgesLock) affectedNode.OutEdges[layer].Remove(oldNeighborId);
+                    lock (oldNeighbor.InEdgesLock) oldNeighbor.InEdges[layer].Remove(affectedNodeId);
+                }
+
+                // Add references for newly selected neighbors.
+                for (int j = 0; j < newOut.Length; j++)
+                {
+                    var newNeighborId = newOut[j];
+                    if (oldSeen.Contains(newNeighborId)) continue;
+
+                    var newNeighbor = data.Nodes[newNeighborId];
+                    var locked = newNeighbor.NodeLock.TryEnterReadLock(0);
                     try
                     {
-                        if (!locked || candidateNode.IsRemoved) continue;
+                        if (!locked || newNeighbor.IsRemoved) continue;
 
-                        lock (activeNode.OutEdgesLock) activeNode.OutEdges[layer].Add(candidateId);
-                        lock (candidateNode.InEdgesLock) candidateNode.InEdges[layer].Add(affectedNodeId);
+                        lock (affectedNode.OutEdgesLock) affectedNode.OutEdges[layer].Add(newNeighborId);
+                        lock (newNeighbor.InEdgesLock) newNeighbor.InEdges[layer].Add(affectedNodeId);
                     }
                     finally
                     {
-                        if (locked) candidateNode.NodeLock.ExitReadLock();
+                        if (locked) newNeighbor.NodeLock.ExitReadLock();
                     }
                 }
-
-                if (activeNode.OutEdges[layer].Count > data.MaxEdges(layer))
-                {
-                    lock (activeNode.OutEdgesLock) PruneOverflow(activeNode, layer);
-                }
             }
-            ArrayPool<NodeDistance<TDistance>>.Shared.Return(localCandidates);
+            ArrayPool<NodeDistance<TDistance>>.Shared.Return(candidateDistances);
         }
 
         /// <summary>

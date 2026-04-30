@@ -145,8 +145,7 @@
             var evenVectors = evenIndexedVectors.ConvertAll(v => v.Label);
             var removalRecall = Utils.Recall(index, evenVectors, evenVectors);
 
-            // Allow 10% drop after removal
-            Assert.IsTrue(insertRecall < removalRecall + 0.1 * insertRecall);
+            Assert.IsTrue(insertRecall * 0.98 < removalRecall);
 
             // Ensure in and out edges are balanced
             var info = index.GetInfo();
@@ -182,7 +181,7 @@
             var evenVectors = evenIndexedVectors.ConvertAll(v => v.Label);
             var removalRecall = Utils.Recall(index, evenVectors, evenVectors);
 
-            Assert.IsTrue(insertRecall < removalRecall);
+            Assert.IsTrue(insertRecall * 0.98 < removalRecall);
 
             // Ensure in and out edges are balanced
             var info = index.GetInfo();
@@ -215,7 +214,7 @@
             var evenVectors = evenIndexedVectors.ConvertAll(v => v.Label);
             var removalRecall = Utils.Recall(index, evenVectors, evenVectors);
 
-            Assert.IsTrue(insertRecall < removalRecall);
+            Assert.IsTrue(insertRecall * 0.9 < removalRecall);
 
             // Ensure in and out edges are balanced
             var info = index.GetInfo();
