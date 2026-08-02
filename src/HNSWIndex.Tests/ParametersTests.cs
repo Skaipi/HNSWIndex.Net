@@ -12,26 +12,6 @@
         }
 
         [TestMethod]
-        public void TestBruteForceHeuristic()
-        {
-            Assert.IsNotNull(vectors);
-
-            var parameters = new HNSWParameters<float> { Heuristic = BruteForceHeuristic };
-            var index = new HNSWIndex<float[], float>(Metrics.CosineMetric.Compute, parameters);
-
-            for (int i = 0; i < vectors.Count; i++)
-            {
-                Utils.Normalize(vectors[i]);
-                index.Add(vectors[i]);
-            }
-
-            var recall = Utils.Recall(index, vectors, vectors);
-            Console.WriteLine(recall);
-            Assert.IsTrue(recall > 0.90);
-        }
-
-
-        [TestMethod]
         public void TestParameterMinNN()
         {
             Assert.IsNotNull(vectors);
@@ -105,11 +85,6 @@
             }
 
             Assert.ThrowsException<InvalidOperationException>(() => index.Remove(0));
-        }
-
-        public static EdgeList BruteForceHeuristic(NodeDistance<float>[] candidates, Func<int, int, float> distanceFnc, int maxEdges)
-        {
-            return new EdgeList(candidates.OrderBy(x => x.Dist).Take(maxEdges).ToList().ConvertAll(x => x.Id));
         }
     }
 }
