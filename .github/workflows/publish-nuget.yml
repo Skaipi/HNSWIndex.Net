@@ -19,16 +19,16 @@ jobs:
             9.0.x
 
       - name: Restore dependencies
-        run: dotnet restore ./HNSWIndex/HNSWIndex.csproj
+        run: dotnet restore ./src/HNSWIndex/HNSWIndex.csproj
 
       - name: Build
-        run: dotnet build ./HNSWIndex/HNSWIndex.csproj --configuration Release --no-restore
+        run: dotnet build ./src/HNSWIndex/HNSWIndex.csproj --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test ./HNSWIndex/HNSWIndex.csproj --verbosity normal
+        run: dotnet test ./src/HNSWIndex/HNSWIndex.csproj --verbosity normal
 
       - name: Pack
-        run: dotnet pack ./HNSWIndex/HNSWIndex.csproj --configuration Release -o ./artifacts
+        run: dotnet pack ./src/HNSWIndex/HNSWIndex.csproj --configuration Release -o ./artifacts
 
       - name: Publish to NuGet
         run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
