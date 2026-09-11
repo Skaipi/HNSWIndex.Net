@@ -13,6 +13,7 @@ namespace HNSWIndex
 
         internal BinaryHeap(int capacity = 0, TComparer cmp = default)
         {
+            if (capacity < 0) throw new ArgumentOutOfRangeException(nameof(capacity));
             buffer = capacity > 0 ? new T[capacity] : Array.Empty<T>();
             comparer = cmp;
         }
@@ -108,7 +109,9 @@ namespace HNSWIndex
 
         private void ExtendBuffer()
         {
-            int newSize = buffer.Length == 0 ? 16 : buffer.Length * 2;
+            if (buffer.Length == Array.MaxLength)
+                throw new InvalidOperationException("The heap has reached the maximum supported capacity.");
+            int newSize = buffer.Length == 0 ? 16 : (int)Math.Min(Array.MaxLength, (long)buffer.Length * 2);
             Array.Resize(ref buffer, newSize);
         }
     }
