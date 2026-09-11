@@ -170,7 +170,7 @@ namespace HNSWIndex
         /// </summary>
         internal int GetTopLayer()
         {
-            return Nodes[EntryPointId].MaxLayer;
+            return EntryPointId > 0 ? Nodes[EntryPointId].MaxLayer : -1;
         }
 
         /// <summary>
