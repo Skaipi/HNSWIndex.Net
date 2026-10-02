@@ -128,6 +128,18 @@ namespace HNSWIndex
         }
 
         /// <summary>
+        /// Remove references to unused node and allow garbage collection.
+        /// </summary>
+        internal void ReleaseItem(int itemId)
+        {
+            if (activeNodes.Contains(itemId))
+                throw new InvalidOperationException("Cannot release an active item. Remove it first.");
+
+            Items[itemId] = default!;
+            Nodes[itemId] = default!;
+        }
+
+        /// <summary>
         /// Replace node at given id
         /// </summary>
         internal int UpdateItem(int itemId, TVector label)
