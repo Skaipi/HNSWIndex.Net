@@ -13,10 +13,15 @@ namespace HNSWIndex
 
         public object InEdgesLock { get; } = new();
 
+        public ReaderWriterLockSlim NodeLock { get; } = new();
+
         [ProtoMember(2)]
-        public EdgeList[] OutEdges = Array.Empty<EdgeList>();
+        public bool IsRemoved { get; set; } = false;
 
         [ProtoMember(3)]
+        public EdgeList[] OutEdges = Array.Empty<EdgeList>();
+
+        [ProtoMember(4)]
         public EdgeList[] InEdges = Array.Empty<EdgeList>();
 
         public int MaxLayer => OutEdges.Length - 1;
@@ -54,6 +59,8 @@ namespace HNSWIndex
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Span<int> AsWritableSpan() => new Span<int>(Buffer, 0, Count);
+        public int[] ToArray() => AsSpan().ToArray();
+        public List<int> ToList() => AsSpan().ToArray().ToList();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Add(int value)

@@ -33,12 +33,6 @@ namespace HNSWIndex.Metrics
                         var b1 = Avx.LoadVector256(ptrB + i + step);
                         var d1 = Avx.Subtract(a1, b1);
                         acc256 = Fma.IsSupported ? Fma.MultiplyAdd(d1, d1, acc256) : Avx.Add(acc256, Avx.Multiply(d1, d1));
-
-                        // Vector256<float> vu = Avx.LoadVector256(ptrA + i);
-                        // Vector256<float> vv = Avx.LoadVector256(ptrB + i);
-                        // Vector256<float> diff = Avx.Subtract(vu, vv);
-                        // Vector256<float> dist = Avx.Multiply(diff, diff);
-                        // acc256 = Fma.IsSupported ? Fma.MultiplyAdd(diff, diff, acc256) : Avx.Add(acc256, dist);
                     }
                     for (; i < stop; i += step)
                     {
@@ -54,10 +48,6 @@ namespace HNSWIndex.Metrics
                     sum128 = Sse3.HorizontalAdd(sum128, sum128);
                     sum128 = Sse3.HorizontalAdd(sum128, sum128);
                     float partialSum = sum128.ToScalar();
-
-                    // Vector256<float> temp = Avx.HorizontalAdd(acc256, acc256);
-                    // temp = Avx.HorizontalAdd(temp, temp);
-                    // float partialSum = temp.GetElement(0) + temp.GetElement(1);
 
                     // Handle remainder
                     for (; i < length; i++)

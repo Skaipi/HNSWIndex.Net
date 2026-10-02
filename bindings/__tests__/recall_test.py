@@ -44,3 +44,15 @@ def test_resize():
     recall = (ids == result_ids).sum() / len(ids)
 
     assert recall > 0.85
+
+
+def test_range_query():
+    vectors = np.random.rand(2_000, DIM)
+    index = Index(DIM)
+    index.set_collection_size(100)
+
+    ids = index.add(vectors)
+    result_ids, distances = index.range_query(vectors, 16.0)
+
+    for d in distances:
+        assert all(d < 16.0)
