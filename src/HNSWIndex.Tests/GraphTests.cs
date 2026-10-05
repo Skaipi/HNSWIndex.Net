@@ -1,5 +1,6 @@
 ﻿namespace HNSWIndex.Tests
 {
+    using System.Runtime.CompilerServices;
     using HNSWIndex;
 
     [TestClass]
@@ -192,7 +193,7 @@
         }
 
         [TestMethod]
-        public void RemoveNodesBatchTest()
+        public void RemoveAndReleaseNodesBatchTest()
         {
             Assert.IsNotNull(vectors);
 
@@ -216,12 +217,104 @@
 
             Assert.IsTrue(insertRecall * 0.98 < removalRecall);
 
-            // Ensure in and out edges are balanced
-            var info = index.GetInfo();
-            foreach (var layer in info.Layers)
+            // Ensure in and out edges are balanced after remove
+            var removeInfo = index.GetInfo();
+            foreach (var layer in removeInfo.Layers)
             {
                 Assert.IsTrue(layer.AvgOutEdges == layer.AvgInEdges);
             }
+
+            index.ReleaseItems(oddIndexedVectors.ConvertAll(x => x.Id));
+            var releaseRecall = Utils.Recall(index, evenVectors, evenVectors);
+
+            Assert.IsTrue(releaseRecall == removalRecall);
+            foreach (var (_, id) in oddIndexedVectors)
+            {
+                Assert.IsNull(index.Data.Items[id]);
+                Assert.IsNull(index.Data.Nodes[id]);
+            }
+
+            // Ensure in and out edges are balanced after release
+            var releaseInfo = index.GetInfo();
+            for (int i = 0; i < removeInfo.Layers.Count; i++)
+            {
+                var layer = releaseInfo.Layers[i];
+                Assert.IsTrue(layer.AvgOutEdges == layer.AvgInEdges);
+                Assert.IsTrue(layer.AvgOutEdges == removeInfo.Layers[i].AvgOutEdges);
+            }
+        }
+
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static (int Id, WeakReference<Utils.TrackedVector> Reference) AddAndRemove(
+            HNSWIndex<Utils.TrackedVector, float> index)
+        {
+            var item = new Utils.TrackedVector { Value = 1 };
+            var reference = new WeakReference<Utils.TrackedVector>(item);
+            var id = index.Add(item);
+            index.Remove(id);
+
+            return (id, reference);
+        }
+
+        private static void ForceFullCollection()
+        {
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static bool IsAlive<T>(WeakReference<T> reference)
+            where T : class
+        {
+            return reference.TryGetTarget(out _);
+        }
+
+        [TestMethod]
+        [DoNotParallelize]
+        public void ReleaseItemAllowsRemovedItemToBeCollected()
+        {
+            var index = new HNSWIndex<Utils.TrackedVector, float>(
+                static (a, b) => Math.Abs(a.Value - b.Value));
+
+            var (id, reference) = AddAndRemove(index);
+
+            ForceFullCollection();
+            // Strong reference still present
+            Assert.IsTrue(IsAlive(reference));
+
+            index.ReleaseItem(id);
+
+            Assert.IsNull(index.Data.Items[id]);
+            Assert.IsNull(index.Data.Nodes[id]);
+
+            ForceFullCollection();
+            // No strong references left
+            Assert.IsFalse(IsAlive(reference));
+
+            var replacement = new Utils.TrackedVector { Value = 2 };
+            var replacementId = index.Add(replacement);
+
+            Assert.AreEqual(id, replacementId);
+            Assert.AreSame(replacement, index.Data.Items[id]);
+            Assert.IsNotNull(index.Data.Nodes[id]);
+            Assert.AreEqual(1, index.Count);
+        }
+
+        [TestMethod]
+        public void ReleaseActiveItemThrows()
+        {
+            var item = new Utils.TrackedVector { Value = 1 };
+            var index = new HNSWIndex<Utils.TrackedVector, float>(
+                static (a, b) => Math.Abs(a.Value - b.Value));
+            var id = index.Add(item);
+
+            Assert.ThrowsException<InvalidOperationException>(() => index.ReleaseItem(id));
+            Assert.AreEqual(1, index.Count);
+            Assert.AreSame(item, index.Items().Single());
+            Assert.AreSame(item, index.Data.Items[id]);
+            Assert.IsNotNull(index.Data.Nodes[id]);
         }
 
         [TestMethod]

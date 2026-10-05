@@ -9,6 +9,8 @@ namespace HNSWIndex
 
         private readonly GraphData<TVector, TDistance> data;
 
+        internal GraphData<TVector, TDistance> Data => data;
+
         private readonly GraphConnector<TVector, TDistance> connector;
 
         private readonly GraphNavigator<TVector, TDistance> navigator;
@@ -55,7 +57,7 @@ namespace HNSWIndex
         public int Add(TVector item)
         {
             var itemId = data.AddItem(item);
-            if (itemId == -1) return itemId;
+            if (itemId == -1) throw new ArgumentException($"Index allocation for HNSW item failed");
 
             lock (data.Nodes[itemId].OutEdgesLock)
             {
@@ -78,7 +80,8 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Remove item with given index from graph structure
+        /// Remove item with given index from graph structure.
+        /// Item has to be released separately to allow garbage collection.
         /// </summary>
         public void Remove(int itemIndex)
         {
@@ -89,13 +92,33 @@ namespace HNSWIndex
         }
 
         /// <summary>
-        /// Remove collection of items associated with indexes
+        /// Remove collection of items associated with indexes.
+        /// Items have to be released separately to allow garbage collection.
         /// </summary>
         public void Remove(List<int> indexes)
         {
             Parallel.For(0, indexes.Count, (i) =>
             {
                 Remove(indexes[i]);
+            });
+        }
+
+        /// <summary>
+        /// Allow garbage collection of item.
+        /// </summary>
+        public void ReleaseItem(int itemIndex)
+        {
+            data.ReleaseItem(itemIndex);
+        }
+
+        /// <summary>
+        /// Allow garbage collection of item.
+        /// </summary>
+        public void ReleaseItems(List<int> indexes)
+        {
+            Parallel.For(0, indexes.Count, (i) =>
+            {
+                ReleaseItem(indexes[i]);
             });
         }
 

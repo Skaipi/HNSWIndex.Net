@@ -4,6 +4,12 @@
     {
         private static int seed = 65537;
 
+        internal class TrackedVector
+        {
+            public float Value { get; init; }
+            public byte[] Payload { get; } = new byte[1024 * 1024];
+        }
+
         /// <summary>
         /// Compute length of a vector
         /// </summary>

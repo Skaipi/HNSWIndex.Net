@@ -23,27 +23,17 @@ namespace HNSWIndex
         /// </summary>
         internal void ConnectNewNode(int nodeId)
         {
-            // If this is new ep we keep lock for entire Add Operation
-            Monitor.Enter(data.entryPointLock);
-            if (data.EntryPointId < 0)
-            {
-                data.EntryPointId = nodeId;
-                Monitor.Exit(data.entryPointLock);
-                return;
-            }
-
             var currNode = data.Nodes[nodeId];
-            if (currNode.MaxLayer > data.GetTopLayer())
+            lock (data.entryPointLock)
             {
-                AddNewConnections(currNode);
-                data.EntryPointId = nodeId;
-                Monitor.Exit(data.entryPointLock);
+                if (currNode.MaxLayer > data.GetTopLayer())
+                {
+                    AddNewConnections(currNode);
+                    data.EntryPointId = nodeId;
+                    return;
+                }
             }
-            else
-            {
-                Monitor.Exit(data.entryPointLock);
-                AddNewConnections(currNode);
-            }
+            AddNewConnections(currNode);
         }
 
         /// <summary>
@@ -171,6 +161,8 @@ namespace HNSWIndex
         /// </summary>
         internal void AddNewConnections(Node currNode)
         {
+            // Skip search on epmpty graph
+            if (data.EntryPointId < 0) return;
             var bestPeer = navigator.FindEntryPoint(currNode.MaxLayer, data.Items[currNode.Id]);
 
             for (int layer = Math.Min(currNode.MaxLayer, data.GetTopLayer()); layer >= 0; --layer)
